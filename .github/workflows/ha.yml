@@ -1,4 +1,4 @@
-name: HA-APK 终极时间修复版 (解决证书冲突)
+name: HA-APK 零动代码修复版 (防闪退核心)
 
 on:
   workflow_dispatch:
@@ -10,60 +10,50 @@ jobs:
       - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 准备工具
+      - name: 2. 初始化环境
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 3. 反编译
-        run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
+      - name: 3. 反编译 (注意：不使用 -r 模式，我们需要碰资源)
+        run: java -jar tools/apktool.jar d ha.apk -o ha_workdir -f
 
-      - name: 4. 执行“全量授权”手术
+      - name: 4. 执行“非侵入式”修改
         run: |
           cd ha_workdir
-          echo "--- 正在重构逻辑 ---"
+          echo "--- 启动非侵入式修复 ---"
 
-          # [A] 解决证书与时间：强制 SharedPreferences 
-          TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
-          if [ -n "$TARGET" ]; then
-              # 强行返回 2099 年时间字符串
-              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/c \.method public final getString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;\n    .locals 1\n    const-string v0, "2099-12-31 23:59:59"\n    return-object v0\n.end method' "$TARGET"
-              # 强行返回已激活
-              sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/c \.method public final getBoolean(Ljava/lang/String;Z)Z\n    .locals 1\n    const/4 v0, 0x1\n    return v0\n.end method' "$TARGET"
-          fi
+          # [A] 针对 Auto.js 的 project.json 注入
+          # 很多 Auto.js 应用的权限是写在 assets/project.json 里的
+          # 我们把里面的字段强行改为 true，而不动 dex 代码
+          find assets -name "project.json" | xargs sed -i 's/"is_vip": false/"is_vip": true/g' 2>/dev/null || true
+          find assets -name "project.json" | xargs sed -i 's/"activated": false/"activated": true/g' 2>/dev/null || true
 
-          # [B] 针对 JavaScript 脚本层劫持 (Auto.js 核心)
-          # 既然有 org/mozilla/javascript，我们直接在所有读取字符串的地方拦截
-          # 只要读取到带有 "time" 或 "date" 的变量，就强行覆盖
-          find . -type f -name "*.smali" | xargs grep -l "Lorg/joda/time" | xargs -I {} bash -c '
-            sed -i "s/move-result-object v0/const-string v0, \"2099-12-31\"\n    # /g" {}
-          ' || true
+          # [B] 物理劫持服务器域名 (让它连不上验证服务器)
+          # 当连不上服务器时，很多 App 会走本地缓存逻辑
+          find . -type f -name "*.smali" | xargs sed -i 's/gaosha\.net/127.0.0.1/g' || true
 
-          # [C] 暴力跳过 equals 比对
-          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "equals" | xargs -I {} \
-            sed -i "s/move-result v0/const\/4 v0, 0x1/g" {} || true
-
-          # [D] 物理屏蔽退出
-          find . -name "*.smali" | xargs sed -i "s/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/nop/g" || true
+          # [C] 关键：移除清单文件中的“自启动”和“权限检查”服务
+          # 有些闪退是因为重签名后，某些系统 Service 校验不通过导致的
+          sed -i '/android:name=".*\.CheckingService"/d' AndroidManifest.xml || true
 
           echo "--- 修复完成 ---"
 
-      - name: 5. 重构 APK
+      - name: 5. 重构 APK (关键：使用 aapt2 保持对齐)
         run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
 
-      - name: 6. 物理对齐
+      - name: 6. 物理页面对齐 (4KB 对齐防止安卓 11+ 闪退)
         run: zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 7. 执行签名 (修复 Alias 冲突)
+      - name: 7. 执行 V2+V3 强力签名
         run: |
-          # 关键点：物理删除旧证书，防止重复
           rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_final_v10.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_no_mod_fixed.apk aligned.apk
 
-      - name: 8. 发布
+      - name: 8. 上传
         uses: actions/upload-artifact@v4
         with:
-          name: Fixed_Final_V10
-          path: ha_final_v10.apk
+          name: No_Mod_Fixed_APK
+          path: ha_no_mod_fixed.apk
