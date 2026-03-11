@@ -1,4 +1,4 @@
-name: 34 版云端暴力破解与 APK 构建工作流
+name: 35 版云端暴力破解与 APK 构建工作流
 
 on:
   workflow_dispatch:
@@ -29,17 +29,28 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 下载物理打包工具 (Apktool & Build-Tools)
+      - name: 安装 Android 构建工具 (修复 zipalign 缺失)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zipalign
+          # 安装 android-sdk-build-tools 以获取 apksigner
+          sudo apt-get install -y google-android-build-tools-33-installer-preview-v2 || true
+          
+          # 物理检查工具是否存在，如果 apt 安装失败，则尝试导出路径
+          if ! command -v zipalign &> /dev/null; then
+            echo "正在尝试物理补齐 zipalign..."
+            sudo apt-get install -y android-sdk-build-tools
+          fi
+
+      - name: 下载物理打包工具 (Apktool)
         run: |
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
-          # 安装 Android 命令行工具以获得 apksigner
-          sudo apt-get update && sudo apt-get install -y google-android-build-tools-33-installer-preview-v2 zipalign apksigner || true
           echo "工具环境准备完成"
 
       - name: 静默审计与全量暴力修复
         run: |
-          echo "开始执行 34 版物理暴力修复..."
+          echo "开始执行 35 版物理暴力修复..."
 
           # 1. 物理致盲：CrashHandler
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
@@ -76,8 +87,8 @@ jobs:
 
       - name: 物理 4 字节对齐 (Zipalign)
         run: |
-          # 对齐是安装成功的物理前提
-          zipalign -v 4 unsigned.apk aligned.apk
+          # 使用绝对路径或确保 command 可用
+          zipalign -v 4 unsigned.apk aligned.apk || /usr/bin/zipalign -v 4 unsigned.apk aligned.apk
           echo "物理对齐完成"
 
       - name: 物理 V2 签名 (Apksigner)
@@ -85,7 +96,7 @@ jobs:
           # 创建物理证书
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           
-          # 使用 apksigner 执行 V2 签名，彻底解决“没有证书”问题
+          # 使用 apksigner 执行 V2 签名
           apksigner sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out build_output.apk aligned.apk
           
           # 验证签名状态
@@ -97,11 +108,11 @@ jobs:
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "42 版物理修复：升级 V2 签名解决安装证书错误"
+          git diff-index --quiet HEAD || git commit -m "35 版物理修复：修复 zipalign 缺失并完成 V2 签名"
           git push origin ${{ github.event.inputs.target_branch }}
 
       - name: 发布 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: Cracked_v34_V2_Signed_APK
+          name: Cracked_v35_V2_Signed_APK
           path: build_output.apk
