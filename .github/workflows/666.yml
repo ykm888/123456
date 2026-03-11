@@ -21,21 +21,28 @@ jobs:
         run: |
           echo "开始执行 34 版物理暴力修复..."
 
-          # 1. 物理致盲：CrashHandler (37 版：流式注入)
+          # 1. 物理致盲：CrashHandler (38 版：使用流式写回，规避 sed 转义问题)
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
           if [ ! -z "$CRASH_HANDLER" ]; then
             echo "注入 CrashHandler: $CRASH_HANDLER"
-            # 找到 .locals 并直接在其后追加 return-void，不使用复杂的 a 命令
-            sed -i '/.locals/ s/$/\n    return-void/' "$CRASH_HANDLER"
+            # 使用精准行号注入 return-void
+            LINE=$(grep -n ".locals" "$CRASH_HANDLER" | head -n 1 | cut -d: -f1)
+            sed -i "${LINE}a \    return-void" "$CRASH_HANDLER"
           fi
 
-          # 2. 暴力注入：SharedPreferencesView (37 版：采用单行正则替换，彻底消除 extra characters 错误)
+          # 2. 暴力注入：SharedPreferencesView (38 版：彻底弃用复杂的块匹配 sed)
+          # 报错点在于之前的 sed 语句过于复杂。现在改为：找到方法名，下移一行（.locals），然后注入。
           PREFS_VIEW=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ ! -z "$PREFS_VIEW" ]; then
             echo "注入 SharedPreferencesView: $PREFS_VIEW"
-            # 使用分号分隔指令，或者通过捕获组重新写回。这是 Linux 下最安全的 sed 语法。
-            # 逻辑：在 getBoolean 方法内的第一个 .locals 声明行直接替换为包含注入代码的多行文本
-            sed -i '/.method public final getBoolean(Ljava/lang/String;Z)Z/,/.end method/ s/\.locals.*/&\n    const\/4 v0, 0x1\n    return v0/' "$PREFS_VIEW"
+            # 逻辑：定位到 getBoolean 方法所在的行号
+            START_LINE=$(grep -n "getBoolean(Ljava/lang/String;Z)Z" "$PREFS_VIEW" | head -n 1 | cut -d: -f1)
+            if [ ! -z "$START_LINE" ]; then
+              # 在方法声明后的第一个 .locals 行（通常是 START_LINE + 1）下方插入注入代码
+              LOCALS_LINE=$((START_LINE + 1))
+              # 使用这种方式注入多行，不会产生 "extra characters" 报错
+              sed -i "${LOCALS_LINE}a \    const/4 v0, 0x1\n    return v0" "$PREFS_VIEW"
+            fi
           fi
 
           # 3. 像素级劫持：域名污染修复 (main.js)
@@ -59,5 +66,5 @@ jobs:
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "34 版物理修复：采用 37 版流式注入语法彻底解决 sed 兼容性报错"
+          git diff-index --quiet HEAD || git commit -m "34 版物理修复：采用 38 版行号精准注入法彻底解决 sed 报错"
           git push origin ${{ github.event.inputs.target_branch }}
