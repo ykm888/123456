@@ -1,0 +1,22 @@
+.class public interface abstract Lcom/stardust/autojs/core/console/FileConsoleView$LogItem;
+.super Ljava/lang/Object;
+.source "SourceFile"
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Lcom/stardust/autojs/core/console/FileConsoleView;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x609
+    name = "LogItem"
+.end annotation
+
+
+# virtual methods
+.method public abstract getContent()Ljava/lang/String;
+.end method
+
+.method public abstract getLevel()Lorg/apache/log4j/Level;
+.end method

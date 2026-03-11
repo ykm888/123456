@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/text_script_running">
+        <SwitchPreference android:title="@string/text_use_volume_to_stop_running" android:key="@string/key_use_volume_control_running" android:defaultValue="true" />
+        <SwitchPreference android:title="@string/text_dont_show_main_activity" android:key="@string/key_dont_show_main_activity" android:summary="@string/summary_dont_show_main_activity" android:defaultValue="false" />
+        <SwitchPreference android:title="@string/text_foreground_service" android:key="@string/key_foreground_service" android:summary="@string/summary_pref_foreground_service" android:defaultValue="false" />
+        <Preference android:title="@string/text_log" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/text_accessibility_service">
+        <SwitchPreference android:title="@string/text_accessibility_service" android:key="autojs:accessibility_service" android:summary="@string/text_accessibility_service_description" android:defaultValue="false" />
+        <SwitchPreference android:title="@string/text_enable_accessibility_service_by_root" android:key="@string/key_enable_accessibility_service_by_root" android:summary="@string/summary_enable_accessibility_service_by_root" android:defaultValue="false" />
+        <SwitchPreference android:title="@string/text_stable_mode" android:key="@string/key_stable_mode" android:summary="@string/summary_stable_mode" android:defaultValue="false" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/text_permissions">
+        <SwitchPreference android:title="@string/text_floating_window_permission" android:key="autojs:floating_window_permission" android:defaultValue="false" />
+        <SwitchPreference android:title="@string/text_ignore_power_battery_optimizations" android:key="autojs:ignoring_power_battery_optimizations" android:defaultValue="false" />
+    </PreferenceCategory>
+</PreferenceScreen>

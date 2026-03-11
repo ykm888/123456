@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">inrt</string>
+    <string name="cancel">取消</string>
+    <string name="details_cannot_handle_intent">"没有可以该处理Intent的任务。请在任务管理中针对文件类型添加处理任务。
+%s"</string>
+    <string name="error_activity_not_found_for_apk_installing">找不到安装apk的应用</string>
+    <string name="error_cannot_execute_timed_task_file_not_exists">无法执行任务，文件不存在，请在任务管理中取消任务或修改文件路径: %s</string>
+    <string name="error_cannot_start_activity">错误：无法启动Activity，请检查是否有执行ui.setMainActivity()或者是否遇到错误。</string>
+    <string name="error_clip_too_large">复制内容过大，已截断为500KB</string>
+    <string name="error_read_log">读取日志失败: %s</string>
+    <string name="error_screen_capture_need_foreground">Android 11以上系统需要启用前台服务通知才能申请截图权限，请在Auto.js Pro的侧拉菜单中开启，打包软件则使用settings模块开启</string>
+    <string name="error_unsuppored_plugin_connection">免安装插件暂不支持远程AIDL调用</string>
+    <string name="exception_notification_service_disabled">通知服务未运行，请重新启用通知权限</string>
+    <string name="foreground_notification_channel_name">前台服务通知</string>
+    <string name="foreground_notification_text">本通知是保持运行和申请截图权限所需，可以在侧拉菜单中关闭</string>
+    <string name="foreground_notification_title">%s保持运行中</string>
+    <string name="log_accessibility_service_connected" formatted="false">无障碍服务已连接(%s): 稳定模式: %s</string>
+    <string name="log_accessibility_service_created">无障碍服务已创建(%s)</string>
+    <string name="log_accessibility_service_destroyed">无障碍服务已销毁(%s)</string>
+    <string name="msg_blocking_selector_in_ui_thread">不能在ui线程执行阻塞操作, 请在子线程或子脚本执行findOne()或untilFind()</string>
+    <string name="msg_gesture_on_main_thread">不能在主线程(UI)执行手势操作，请使用gesturesAsync, clickAsync等函数或者在子线程中执行</string>
+    <string name="msg_settings_volume_up">"仅在打包应用中可用脚本设置'音量上键停止脚本' stop_all_on_volume_up"</string>
+    <string name="no_read_phone_state_permissin">没有读取设备信息权限</string>
+    <string name="no_read_phone_state_permissin_imei">没有读取设备信息权限（Android 10以上系统不再允许读取IMEI）</string>
+    <string name="no_usage_statics_permission">没有查看使用统计权限</string>
+    <string name="no_write_settings_permissin">沒有修改系統设置权限</string>
+    <string name="ok">确定</string>
+    <string name="powered_by_autojs">Powered by Auto.js Pro</string>
+    <string name="script_notification_channel_name">脚本发出的通知</string>
+    <string name="summary_dont_show_main_activity">打开应用后直接运行</string>
+    <string name="summary_enable_accessibility_service_by_root">开启后会使用Root权限自动开启无障碍服务</string>
+    <string name="summary_pref_foreground_service">开启后将在通知栏持续显示通知，不容易被系统杀死</string>
+    <string name="summary_stable_mode">开启后布局分析更简略、快速。重启无障碍服务生效</string>
+    <string name="text_accessibility_service">无障碍服务</string>
+    <string name="text_accessibility_service_description">使脚本自动操作(点击、长按、滑动等)所需，若关闭则只能执行不涉及自动操作的脚本。</string>
+    <string name="text_already_copy_to_clip">已复制到剪贴板</string>
+    <string name="text_already_stop_n_scripts">已停止%d个正在运行的脚本</string>
+    <string name="text_auto_operate_service_enabled_but_not_running">无障碍服务已启用但并未运行，请尝试重启无障碍服务或重启设备</string>
+    <string name="text_cannot_handle_intent">无法处理Intent</string>
+    <string name="text_choose_script_to_handle_intent">请选择处理该Intent/文件的脚本</string>
+    <string name="text_clear_log_file">清空日志文件</string>
+    <string name="text_console">控制台</string>
+    <string name="text_copy_crash_info">复制崩溃信息</string>
+    <string name="text_crash_report">崩溃报告</string>
+    <string name="text_dont_show_main_activity">不显示主界面</string>
+    <string name="text_drawer_close">关闭侧拉菜单</string>
+    <string name="text_drawer_open">打开侧拉菜单</string>
+    <string name="text_enable_accessibility_service_by_root">使用Root权限自动启用服务</string>
+    <string name="text_enable_accessibility_service_by_root_timeout">使用Root权限启动无障碍服务超时</string>
+    <string name="text_error">错误:</string>
+    <string name="text_execution_finished" formatted="false">"
+------------
+[%s]运行结束，用时%f秒"</string>
+    <string name="text_exit">退出</string>
+    <string name="text_file_not_exists">文件不存在</string>
+    <string name="text_floating_window_permission">悬浮窗权限</string>
+    <string name="text_foreground_service">前台服务</string>
+    <string name="text_ignore_power_battery_optimizations">忽略电池优化</string>
+    <string name="text_log">日志</string>
+    <string name="text_log_level">日志等级</string>
+    <string name="text_no_accessibility_permission">无障碍服务未启动</string>
+    <string name="text_no_file_rw_permission">无文件读写权限</string>
+    <string name="text_no_floating_window_permission">没有悬浮窗权限</string>
+    <string name="text_open_by_other_apps">其他应用打开</string>
+    <string name="text_open_with_scripts">使用任务打开</string>
+    <string name="text_others">其他</string>
+    <string name="text_path_is_empty">路径为空</string>
+    <string name="text_permissions">权限</string>
+    <string name="text_please_choose">请选择</string>
+    <string name="text_requires_sdk_version_to_run_the_script">本脚本需要此安卓版本以上才能运行: Android</string>
+    <string name="text_script_running">代码运行</string>
+    <string name="text_search">搜索</string>
+    <string name="text_select_image">选择图片</string>
+    <string name="text_settings">设置</string>
+    <string name="text_should_enable_key_observing">按键监听未启用，请在软件设置中开启</string>
+    <string name="text_stable_mode">稳定模式</string>
+    <string name="text_start_running">开始运行</string>
+    <string name="text_use_volume_to_stop_running">音量上键停止所有</string>
+    <string name="tips_background_launch_app">高版本Android 10系统中，在后台启动应用(包括类似launchApp, requestScreenCapture等多个函数)会失效；某些定制即使在低版本Android也会有这种情况，可以尝试授予\"后台打开界面\"权限（如果有的话）</string>
+    <string name="warn_memory_leak">"检测到内存泄露，请检查您的代码是否有正确回收内存。参见Debug模块的文档 https://pro.autojs.org/docs/zh/v8/debug.html 。
+%s"</string>
+</resources>
