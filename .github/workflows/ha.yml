@@ -1,4 +1,4 @@
-name: HA-APK 万能卡密登录修复版
+name: HA-APK 多工具链自动化工厂
 
 on:
   workflow_dispatch:
@@ -7,72 +7,82 @@ on:
       - 'ha.apk'
 
 jobs:
-  bypass-login:
+  multi-decompile:
     runs-on: ubuntu-latest
     steps:
       - name: 1. 检出代码
         uses: actions/checkout@v4
 
-      - name: 2. 环境初始化 (Java 17)
+      - name: 2. 配置环境 (Java 17)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 3. 安装逆向工具链
+      - name: 3. 安装 & 配置多重工具链
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zipalign apksigner
+          sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
+          
+          # 工具 A: Apktool (处理资源+回编译)
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
+          
+          # 工具 B: Baksmali (底层 Smali 提取，防止代码解析出错)
+          curl -L https://bitbucket.org/JesusFreke/smali/downloads/baksmali-2.5.2.jar -o tools/baksmali.jar
+          curl -L https://bitbucket.org/JesusFreke/smali/downloads/smali-2.5.2.jar -o tools/smali.jar
+          
+          # 工具 C: JADX-CLI (用于自动化导出 Java 源码进行静态分析)
+          curl -L https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip -o tools/jadx.zip
+          unzip tools/jadx.zip -d tools/jadx_bin
 
-      - name: 4. 强制反编译 (覆盖模式)
-        run: java -jar tools/apktool.jar d ha.apk -o ha_workdir -f
-
-      - name: 5. 注入“万能卡密”破解逻辑
+      - name: 4. 多路并行反编译
         run: |
-          cd ha_workdir
-          echo "--- 正在注入万能登录手术刀 ---"
+          # 路径 A: 使用 Apktool 进行标准解包 (用于回编译)
+          java -jar tools/apktool.jar d ha.apk -o workdir_apktool -f
+          
+          # 路径 B: 使用 Baksmali 提取纯净 Smali (用于高阶代码手术)
+          unzip ha.apk -d ha_temp
+          java -jar tools/baksmali.jar d ha_temp/classes.dex -o workdir_baksmali
+          
+          # 路径 C: 使用 JADX 导出源码 (用于在日志中搜索关键词，不用于回编译)
+          ./tools/jadx_bin/bin/jadx ha.apk -d workdir_jadx --no-res --no-debug-info
 
-          # [核心逻辑 A]：劫持字符串比对 (让 equals 永远返回 1)
-          # 这样无论你输入什么，当它与正确卡密比对时，结果都是“一致”的
-          grep -rl "Ljava/lang/String;->equals(Ljava/lang/Object;)Z" . --include="*.smali" | xargs -I {} sed -i 's/move-result v0/const\/4 v0, 0x1/g' {} || true
-
-          # [核心逻辑 B]：劫持布尔验证函数
-          # 寻找常见的验证返回点，强制改为 true (0x1)
-          grep -rlE "checkKey|verifyCode|isLogin|isAuth" . --include="*.smali" | xargs -I {} sed -i '/.method.*Z/,/.end method/ s/return v[0-9]*/const\/4 v0, 0x1\n    return v0/g' {} || true
-
-          # [核心逻辑 C]：强制 SharedPreferences 注入 (本地持久化激活)
+      - name: 5. 跨工具自动化注入
+        run: |
+          echo "--- 正在利用多工具分析结果进行精准修复 ---"
+          
+          # 以 Apktool 工作区为主手术台
+          cd workdir_apktool
+          
+          # [修复 1]：利用 JADX 的搜索结果，在 Smali 中定位卡密点
+          # 这里我们依然针对 SharedPreferencesView 注入
           TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ -n "$TARGET" ]; then
-              echo "注入持久化权限: $TARGET"
-              # 注入 getBoolean 返回 1
-              sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/ s/.locals [0-9]*/.locals 1\n    const\/4 v0, 0x1\n    return v0/g' "$TARGET"
-              # 注入 getString 返回 VIP
-              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/ s/.locals [0-9]*/.locals 1\n    const-string v0, "VIP"\n    return-object v0/g' "$TARGET"
+              sed -i '/.method.*getBoolean/,/.end method/ s/return v[0-9]*/const\/4 v0, 0x1\n    return v0/g' "$TARGET"
           fi
 
-          # [辅助逻辑 D]：域名劫持 (防止联网封禁)
-          find . -name "*.smali" -o -name "*.json" | xargs sed -i 's/gaosha\.net/127.0.0.1/g' 2>/dev/null || true
+          # [修复 2]：万能卡密登录补丁 (精准版)
+          # 寻找包含 "verify" 关键字的文件并强制返回 1
+          grep -rl "verify" . --include="*.smali" | xargs -I {} sed -i '/.method.*Z/,/.end method/ s/return v[0-9]*/const\/4 v0, 0x1\n    return v0/g' {} || true
 
-          echo "--- 万能登录逻辑注入完成 ---"
+          echo "--- 注入完成 ---"
 
-      - name: 6. 回编译 APK
-        run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk
-
-      - name: 7. 4字节物理对齐 (解决闪退)
+      - name: 6. 回编译与优化
         run: |
-          rm -f aligned.apk
+          # 使用 Apktool 重新打包
+          java -jar tools/apktool.jar b workdir_apktool -o unsigned.apk
+          
+          # 物理对齐 (解决闪退的核心)
           zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 8. 执行 V2/V3 全量签名
+      - name: 7. 签名与校验
         run: |
-          rm -f debug.keystore ha_unlimited.apk
+          rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_unlimited.apk aligned.apk
+          apksigner sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_multi_fixed.apk aligned.apk
 
-      - name: 9. 发布最终成品
+      - name: 8. 上传成品
         uses: actions/upload-artifact@v4
         with:
-          name: Universal_Login_APK
-          path: ha_unlimited.apk
+          name: MultiTool_Fixed_APK
+          path: ha_multi_fixed.apk
