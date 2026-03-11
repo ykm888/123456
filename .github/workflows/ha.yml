@@ -1,4 +1,4 @@
-name: HA-APK 幽灵伪装修复版 (解决终极闪退)
+name: HA-APK 精准修复版 (解决 Smali 语法错误)
 
 on:
   workflow_dispatch:
@@ -7,10 +7,10 @@ on:
       - 'ha.apk'
 
 jobs:
-  ghost-repair:
+  repair:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 物理检出
+      - name: 1. 检出代码
         uses: actions/checkout@v4
 
       - name: 2. 初始化 Java 17
@@ -19,59 +19,65 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 3. 部署逆向全家桶
+      - name: 3. 安装工具链
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 4. 零风险反编译 (仅提取代码)
-        # 强制不反编译资源，保持 resources.arsc 的原始物理哈希
+      - name: 4. 反编译 (不反编译资源)
         run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 5. 执行“幽灵注入” (绕过 Native 校验)
+      - name: 5. 执行安全注入 (修正语法错误)
         run: |
           cd ha_workdir
-          echo "--- 启动幽灵伪装手术 ---"
+          echo "--- 启动安全注入手术 ---"
 
-          # [A] 核心：绕过所有 ContextWrapper 的签名检查
-          # 这样即便我们重签名了，App 调用的 getPackageInfo 也会得到错误但“正确”的结果
-          grep -rl "getPackageInfo" . --include="*.smali" | xargs -I {} sed -i 's/move-result-object v0/const-object v0, v1\n    # /g' {} || true
-
-          # [B] 卡密逻辑：改写 SharedPreferences 默认值
-          # 不直接在 Smali 里插入大量代码，而是修改现有常量的赋值，减少文件大小变化
+          # [A] 精准权限注入：仅修改 SharedPreferencesView
           TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ -n "$TARGET" ]; then
-              # 仅修改 return 之前的寄存器值，保持方法长度不变，规避长度校验
-              sed -i 's/return v0/const\/4 v0, 0x1\n    return v0/g' "$TARGET"
+              echo "修改权限类: $TARGET"
+              # 在 .locals 声明后直接插入返回值，确保语法正确
+              sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/ s/return v0/const\/4 v0, 0x1\n    return v0/g' "$TARGET"
+              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/ s/return-object v0/const-string v0, "VIP"\n    return-object v0/g' "$TARGET"
           fi
 
-          # [C] 屏蔽崩溃拦截器 (防止它主动弹窗闪退)
-          grep -rlE "Thread;->setDefaultUncaughtExceptionHandler" . --include="*.smali" | xargs -I {} sed -i 's/invoke-static/ # invoke-static/g' {} || true
+          # [B] 安全的签名绕过：避开 androidx/google 等系统路径
+          # 只在非系统目录下寻找 getPackageInfo
+          find . -type f -name "*.smali" ! -path "./smali/androidx/*" ! -path "./smali/android/*" ! -path "./smali/com/google/*" | xargs grep -l "getPackageInfo" | xargs -I {} bash -c '
+            echo "正在注入签名伪装: {}"
+            # 找到 move-result-object 这一行，在它后面直接强行改写寄存器，不删除原逻辑以防破坏堆栈
+            sed -i "/move-result-object v0/a \    const-object v0, v1" {}
+          ' || true
+
+          # [C] 暴力破解卡密比对点 (随便输都能进)
+          # 修正 equals 的 sed 逻辑，确保只在 move-result v0 后修改
+          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "equals" | xargs -I {} \
+            sed -i "s/move-result v0/const\/4 v0, 0x1/g" {} || true
 
           # [D] 物理擦除 System.exit (防自杀补丁)
-          grep -rl "Ljava/lang/System;->exit" . --include="*.smali" | xargs -I {} sed -i 's/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/return-void/g' {} || true
+          # 使用更温和的 nop 替换，不改变行数
+          grep -rl "Ljava/lang/System;->exit" . --include="*.smali" | xargs -I {} \
+            sed -i "s/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/nop/g" {} || true
 
-          echo "--- 幽灵注入完成 ---"
+          echo "--- 注入完成 ---"
 
-      - name: 6. 重新打包 (启用高级对齐)
+      - name: 6. 回编译 APK
         run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
 
-      - name: 7. 执行物理对齐 (4KB 内存对齐)
+      - name: 7. 物理对齐
         run: |
           rm -f aligned.apk
           zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 8. 执行签名 (模拟原厂环境)
+      - name: 8. 执行签名
         run: |
-          rm -f debug.keystore ha_fixed_ghost.apk
-          # 生成一个模仿原厂信息的证书，减少被 Native 层检测的风险
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Google,C=US"
-          # 同时签署 V1, V2, V3 签名，这是 Android 11+ 必修课
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_fixed_ghost.apk aligned.apk
+          rm -f debug.keystore ha_fixed_v3.apk
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_fixed_v3.apk aligned.apk
 
-      - name: 9. 发布最终成品
+      - name: 9. 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: Ghost_Fixed_APK
-          path: ha_fixed_ghost.apk
+          name: Fixed_HA_V3
+          path: ha_fixed_v3.apk
