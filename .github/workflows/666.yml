@@ -1,4 +1,4 @@
-name: 36 版云端暴力破解与 APK 构建工作流
+name: 39 版云端暴力破解与 APK 构建工作流
 
 on:
   workflow_dispatch:
@@ -23,47 +23,37 @@ jobs:
         with:
           ref: ${{ github.event.inputs.target_branch }}
 
-      - name: 配置 Java 环境 (APK 构建必备)
+      - name: 配置 Java 环境
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 安装 Android 构建工具 (修复 zipalign 缺失)
+      - name: 安装 Android 构建工具
         run: |
           sudo apt-get update
-          sudo apt-get install -y zipalign
-          # 安装 android-sdk-build-tools 以获取 apksigner
-          sudo apt-get install -y google-android-build-tools-33-installer-preview-v2 || true
-          
-          # 物理检查工具是否存在，如果 apt 安装失败，则尝试导出路径
-          if ! command -v zipalign &> /dev/null; then
-            echo "正在尝试物理补齐 zipalign..."
-            sudo apt-get install -y android-sdk-build-tools
-          fi
+          sudo apt-get install -y zipalign apksigner
+          echo "工具环境安装完成"
 
-      - name: 下载物理打包工具 (Apktool)
+      - name: 下载 Apktool
         run: |
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
-          echo "工具环境准备完成"
 
-      - name: 静默审计与全量暴力修复
+      - name: 执行 39 版物理暴力破解 (含签名校验屏蔽)
         run: |
-          echo "开始执行 36 版物理暴力修复..."
+          echo "开始 39 版物理修复..."
 
-          # 1. 物理致盲：CrashHandler
+          # 1. 物理致盲：CrashHandler (延续 38 版)
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
           if [ ! -z "$CRASH_HANDLER" ]; then
-            echo "注入 CrashHandler: $CRASH_HANDLER"
             LINE=$(grep -n ".locals" "$CRASH_HANDLER" | head -n 1 | cut -d: -f1)
             sed -i "${LINE}a \    return-void" "$CRASH_HANDLER"
           fi
 
-          # 2. 暴力注入：SharedPreferencesView
+          # 2. 暴力注入：SharedPreferencesView (延续 38 版)
           PREFS_VIEW=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ ! -z "$PREFS_VIEW" ]; then
-            echo "注入 SharedPreferencesView: $PREFS_VIEW"
             START_LINE=$(grep -n "getBoolean(Ljava/lang/String;Z)Z" "$PREFS_VIEW" | head -n 1 | cut -d: -f1)
             if [ ! -z "$START_LINE" ]; then
               LOCALS_LINE=$((START_LINE + 1))
@@ -71,50 +61,42 @@ jobs:
             fi
           fi
 
-          # 3. 像素级劫持：域名污染修复 (main.js)
+          # 3. 39 版新增：暴力屏蔽签名哈希校验 (Signature Bypass)
+          # 搜索所有包含 getSignatures 的方法并使其失效
+          grep -rl "getPackageInfo" . --include="*.smali" | xargs -I {} sed -i '/.method.*getPackageInfo/,/.end method/ s/return-object v0/const\/4 v0, 0x0\n    return-object v0/g' {} || true
+
+          # 4. 签名校验方法强制返回 1 (延续 38 版)
+          grep -rl "checkSignature" . --include="*.smali" | xargs -I {} sed -i '/.method.*checkSignature/,/return/ s/return.*/const\/4 v0, 0x1\n    return v0/g' {} || true
+
+          # 5. 域名劫持 (延续 38 版)
           if [ -f "main.js" ]; then
             sed -i 's/gaosha.net/127.0.0.1/g' main.js
             sed -i 's/gaosha.com/127.0.0.1/g' main.js
           fi
 
-          # 4. 暴力清理：针对常见的 Signatrue 校验类
-          grep -rl "checkSignature" . --include="*.smali" | xargs -I {} sed -i '/.method.*checkSignature/,/return/ s/return.*/const\/4 v0, 0x1\n    return v0/g' {} || true
+      - name: 构建未签名 APK
+        run: java -jar tools/apktool.jar b . -o unsigned.apk
 
-      - name: 物理构建 APK (Build)
-        run: |
-          java -jar tools/apktool.jar b . -o unsigned.apk
-          echo "物理封包完成：unsigned.apk"
+      - name: 物理对齐 (Zipalign)
+        run: zipalign -v 4 unsigned.apk aligned.apk
 
-      - name: 物理 4 字节对齐 (Zipalign)
+      - name: 执行 V2 签名 (Apksigner)
         run: |
-          # 使用绝对路径或确保 command 可用
-          zipalign -v 4 unsigned.apk aligned.apk || /usr/bin/zipalign -v 4 unsigned.apk aligned.apk
-          echo "物理对齐完成"
-
-      - name: 物理 V2 签名 (Apksigner)
-        run: |
-          # 36 版核心修复：创建物理证书前强制清理冲突文件
           rm -f debug.keystore
-          
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          
-          # 使用 apksigner 执行 V2 签名
           apksigner sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out build_output.apk aligned.apk
-          
-          # 验证签名状态
           apksigner verify build_output.apk
-          echo "物理 V2 签名完成并验证通过"
 
-      - name: 物理提交代码变更
+      - name: 提交并推送到仓库
         run: |
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "36 版物理修复：解决 keytool 别名冲突并完成 V2 签名"
+          git diff-index --quiet HEAD || git commit -m "39 版：物理注入破解逻辑及签名校验屏蔽"
           git push origin ${{ github.event.inputs.target_branch }}
 
       - name: 发布 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: Cracked_v36_V2_Signed_APK
+          name: Cracked_v39_APK
           path: build_output.apk
