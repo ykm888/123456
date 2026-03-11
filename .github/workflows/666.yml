@@ -1,4 +1,4 @@
-name: 35 版云端暴力破解与 APK 构建工作流
+name: 36 版云端暴力破解与 APK 构建工作流
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
 
       - name: 静默审计与全量暴力修复
         run: |
-          echo "开始执行 35 版物理暴力修复..."
+          echo "开始执行 36 版物理暴力修复..."
 
           # 1. 物理致盲：CrashHandler
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
@@ -93,7 +93,9 @@ jobs:
 
       - name: 物理 V2 签名 (Apksigner)
         run: |
-          # 创建物理证书
+          # 36 版核心修复：创建物理证书前强制清理冲突文件
+          rm -f debug.keystore
+          
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           
           # 使用 apksigner 执行 V2 签名
@@ -108,11 +110,11 @@ jobs:
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "35 版物理修复：修复 zipalign 缺失并完成 V2 签名"
+          git diff-index --quiet HEAD || git commit -m "36 版物理修复：解决 keytool 别名冲突并完成 V2 签名"
           git push origin ${{ github.event.inputs.target_branch }}
 
       - name: 发布 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: Cracked_v35_V2_Signed_APK
+          name: Cracked_v36_V2_Signed_APK
           path: build_output.apk
