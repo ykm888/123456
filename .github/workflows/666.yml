@@ -21,20 +21,21 @@ jobs:
         run: |
           echo "开始执行 34 版物理暴力修复..."
 
-          # 1. 物理致盲：CrashHandler (修复 sed 语法错误)
+          # 1. 物理致盲：CrashHandler (36 版：使用最稳健的追加模式)
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
           if [ ! -z "$CRASH_HANDLER" ]; then
             echo "注入 CrashHandler: $CRASH_HANDLER"
-            # 使用更稳健的直接替换法，避免 a 命令的换行符兼容性问题
+            # 找到 .locals 行并在其后插入 return-void
             sed -i '/.locals/a \    return-void' "$CRASH_HANDLER"
           fi
 
-          # 2. 暴力注入：SharedPreferencesView (修复 sed 语法错误)
+          # 2. 暴力注入：SharedPreferencesView (36 版：彻底修复 sed 语法歧义)
           PREFS_VIEW=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ ! -z "$PREFS_VIEW" ]; then
             echo "注入 SharedPreferencesView: $PREFS_VIEW"
-            # 物理截断：在 getBoolean 方法内部的第一个匹配点插入强制返回
-            sed -i '/.method public final getBoolean(Ljava/lang/String;Z)Z/,/return/ { /.locals/a \    const/4 v0, 0x1\n    return v0' "$PREFS_VIEW"
+            # 分步操作：先定位 getBoolean 方法区域，再在内部的 .locals 后注入
+            # 使用更简单的范围匹配和追加方式
+            sed -i '/.method public final getBoolean(Ljava/lang/String;Z)Z/,/.end method/ s/.locals.*/&\n    const\/4 v0, 0x1\n    return v0/' "$PREFS_VIEW"
           fi
 
           # 3. 像素级劫持：域名污染修复 (main.js)
@@ -57,5 +58,5 @@ jobs:
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "34 版物理修复：修正 sed 注入语法并完成暴力破解"
+          git diff-index --quiet HEAD || git commit -m "34 版物理修复：采用 36 版安全注入语法修复 sed 错误"
           git push origin ${{ github.event.inputs.target_branch }}
