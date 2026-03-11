@@ -1,4 +1,4 @@
-name: 34 版云端暴力破解工作流
+name: 34 版云端暴力破解与 APK 构建工作流
 
 on:
   workflow_dispatch:
@@ -8,16 +8,14 @@ on:
         required: true
         default: 'main'
 
-# 40 版核心物理修复：注入全局环境参数，消除 Node.js 20 弃用警告
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# 延续 39 版：显式声明写入权限以解决 403 报错
 permissions:
   contents: write
 
 jobs:
-  pixel-repair:
+  pixel-repair-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: 物理检出代码
@@ -25,11 +23,23 @@ jobs:
         with:
           ref: ${{ github.event.inputs.target_branch }}
 
+      - name: 配置 Java 环境 (APK 构建必备)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: 下载物理打包工具 (Apktool)
+        run: |
+          mkdir -p tools
+          curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
+          echo "Apktool 下载完成"
+
       - name: 静默审计与全量暴力修复
         run: |
           echo "开始执行 34 版物理暴力修复..."
 
-          # 1. 物理致盲：CrashHandler (38 版逻辑)
+          # 1. 物理致盲：CrashHandler
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
           if [ ! -z "$CRASH_HANDLER" ]; then
             echo "注入 CrashHandler: $CRASH_HANDLER"
@@ -37,7 +47,7 @@ jobs:
             sed -i "${LINE}a \    return-void" "$CRASH_HANDLER"
           fi
 
-          # 2. 暴力注入：SharedPreferencesView (38 版逻辑)
+          # 2. 暴力注入：SharedPreferencesView
           PREFS_VIEW=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ ! -z "$PREFS_VIEW" ]; then
             echo "注入 SharedPreferencesView: $PREFS_VIEW"
@@ -50,7 +60,6 @@ jobs:
 
           # 3. 像素级劫持：域名污染修复 (main.js)
           if [ -f "main.js" ]; then
-            echo "注入 main.js 劫持逻辑"
             sed -i 's/gaosha.net/127.0.0.1/g' main.js
             sed -i 's/gaosha.com/127.0.0.1/g' main.js
           fi
@@ -58,15 +67,30 @@ jobs:
           # 4. 暴力清理：针对常见的 Signatrue 校验类
           grep -rl "checkSignature" . --include="*.smali" | xargs -I {} sed -i '/.method.*checkSignature/,/return/ s/return.*/const\/4 v0, 0x1\n    return v0/g' {} || true
 
-      - name: 验证修复成果
+      - name: 物理构建 APK (Build)
         run: |
-          echo "检查注入状态..."
-          grep -r "const/4 v0, 0x1" . || echo "警告：部分注入可能未匹配成功"
+          # 假设当前仓库根目录就是反编译后的项目结构
+          # 如果你的源码在子目录，请调整 '.' 为对应路径
+          java -jar tools/apktool.jar b . -o build_output.apk
+          echo "物理封包完成：build_output.apk"
 
-      - name: 物理提交并推送到仓库
+      - name: 物理调试签名 (Sign)
+        run: |
+          # 生成临时签名文件并对 APK 进行签名
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore debug.keystore -storepass android build_output.apk androiddebugkey
+          echo "物理签名完成"
+
+      - name: 物理提交代码变更
         run: |
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "34 版物理修复：采用 40 版环境参数消除 Node 弃用警告"
+          git diff-index --quiet HEAD || git commit -m "41 版物理修复：注入破解逻辑并准备构建"
           git push origin ${{ github.event.inputs.target_branch }}
+
+      - name: 发布 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cracked_v34_APK
+          path: build_output.apk
