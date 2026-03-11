@@ -29,11 +29,13 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 下载物理打包工具 (Apktool)
+      - name: 下载物理打包工具 (Apktool & Build-Tools)
         run: |
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
-          echo "Apktool 下载完成"
+          # 安装 Android 命令行工具以获得 apksigner
+          sudo apt-get update && sudo apt-get install -y google-android-build-tools-33-installer-preview-v2 zipalign apksigner || true
+          echo "工具环境准备完成"
 
       - name: 静默审计与全量暴力修复
         run: |
@@ -69,28 +71,37 @@ jobs:
 
       - name: 物理构建 APK (Build)
         run: |
-          # 假设当前仓库根目录就是反编译后的项目结构
-          # 如果你的源码在子目录，请调整 '.' 为对应路径
-          java -jar tools/apktool.jar b . -o build_output.apk
-          echo "物理封包完成：build_output.apk"
+          java -jar tools/apktool.jar b . -o unsigned.apk
+          echo "物理封包完成：unsigned.apk"
 
-      - name: 物理调试签名 (Sign)
+      - name: 物理 4 字节对齐 (Zipalign)
         run: |
-          # 生成临时签名文件并对 APK 进行签名
+          # 对齐是安装成功的物理前提
+          zipalign -v 4 unsigned.apk aligned.apk
+          echo "物理对齐完成"
+
+      - name: 物理 V2 签名 (Apksigner)
+        run: |
+          # 创建物理证书
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore debug.keystore -storepass android build_output.apk androiddebugkey
-          echo "物理签名完成"
+          
+          # 使用 apksigner 执行 V2 签名，彻底解决“没有证书”问题
+          apksigner sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out build_output.apk aligned.apk
+          
+          # 验证签名状态
+          apksigner verify build_output.apk
+          echo "物理 V2 签名完成并验证通过"
 
       - name: 物理提交代码变更
         run: |
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "41 版物理修复：注入破解逻辑并准备构建"
+          git diff-index --quiet HEAD || git commit -m "42 版物理修复：升级 V2 签名解决安装证书错误"
           git push origin ${{ github.event.inputs.target_branch }}
 
       - name: 发布 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: Cracked_v34_APK
+          name: Cracked_v34_V2_Signed_APK
           path: build_output.apk
