@@ -1,4 +1,4 @@
-name: HA-APK 终极彻底修复版 (不闪退+全量授权)
+name: HA-APK 弹窗物理移除版 (最终方案)
 
 on:
   workflow_dispatch:
@@ -10,56 +10,59 @@ jobs:
       - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 工具部署
+      - name: 2. 初始化逆向环境
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 3. 反编译 (核心：-r 模式，绝对保护 DEX 不被重写)
-        run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
+      - name: 3. 反编译
+        run: java -jar tools/apktool.jar d ha.apk -o ha_workdir -f
 
-      - name: 4. 彻底解决：Assets 脚本全量欺骗
+      - name: 4. 执行“UI 弹窗消除”与“逻辑强入”
         run: |
           cd ha_workdir
-          echo "--- 正在对脚本层执行全量降维打击 ---"
+          echo "--- 正在物理移除卡密验证层 ---"
 
-          # [A] 暴力覆盖所有 JSON 配置文件中的权限字段
-          # 无论脚本怎么读，拿到的全是 true 和 远期时间
-          find assets -type f -name "*.json" | xargs -I {} bash -c '
-            sed -i "s/:false/:true/g" {}
-            sed -i "s/: false/: true/g" {}
-            sed -i "s/\"vip\":0/\"vip\":9/g" {}
-            sed -i "s/\"is_activated\":false/\"is_activated\":true/g" {}
-            sed -i "s/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/2099-12-31/g" {}
+          # [A] 暴力翻转所有逻辑判断 (针对 isVip, isActivated 等)
+          # 无论代码怎么写，只要是返回布尔值的方法，全部强行改为 true
+          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -lE "isVip|isActivated|checkUser|isValid" | xargs -I {} bash -c '
+            sed -i "/.method.*Z/,/.end method/ s/return v[0-9]/const\/4 v0, 0x1\n    return v0/g" {}
           ' || true
 
-          # [B] 针对 Auto.js 源码 JS 的关键字替换
-          # 虽然 JS 可能是加密的，但变量名和 JSON 结构通常是明文
-          # 强制将 "expires" 相关的数值替换为巨大的时间戳
-          find assets -type f -name "*.js" | xargs sed -i 's/isVip:!1/isVip:!0/g' || true
-          find assets -type f -name "*.js" | xargs sed -i 's/activated:!1/activated:!0/g' || true
+          # [B] 物理劫持卡密输入框的比对结果 (equals 补丁)
+          # 只要调用 equals，就认为输入正确
+          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "Ljava/lang/String;->equals" | xargs -I {} bash -c '
+            sed -i "s/move-result v0/const\/4 v0, 0x1\n    # /g" {}
+          ' || true
 
-          # [C] 域名物理阻断 (让 App 无法连上高沙服务器，强制走本地逻辑)
-          # 注意：这里我们只改域名字符串，不改指令，不会导致闪退
-          find . -type f -name "*.smali" | xargs sed -i 's/gaosha\.net/127.0.0.1/g' || true
+          # [C] 核心：直接屏蔽“显示对话框”的方法 (防止弹窗)
+          # 寻找所有调用 show() 显示 Dialog 的地方，将其改为 nop
+          find . -type f -name "*.smali" | xargs sed -i "s/invoke-virtual {.*}, Landroid\/app\/Dialog;->show()V/nop/g" || true
+          find . -type f -name "*.smali" | xargs sed -i "s/invoke-virtual {.*}, Landroid\/app\/AlertDialog;->show()V/nop/g" || true
 
-          echo "--- 修复完成 ---"
+          # [D] 强制写入本地授权 (SharedPreferences)
+          # 这样即便它去查本地文件，也会发现自己是“已授权”
+          TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
+          if [ -n "$TARGET" ]; then
+              sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/c \.method public final getBoolean(Ljava/lang/String;Z)Z\n    .locals 1\n    const/4 v0, 0x1\n    return v0\n.end method' "$TARGET"
+          fi
 
-      - name: 4. 回编译 (保持 AAPT2)
-        run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
+          echo "--- 物理移除完成 ---"
 
-      - name: 5. 物理对齐 (核心防闪退)
-        run: zipalign -f -p -v 4 unsigned.apk aligned.apk
+      - name: 5. 重构与 4K 对齐
+        run: |
+          java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
+          zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 6. 强力签名 (V1/V2/V3 全开)
+      - name: 6. 重新签名
         run: |
           rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_absolute_fixed.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_final_cracked.apk aligned.apk
 
       - name: 7. 上传
         uses: actions/upload-artifact@v4
         with:
-          name: Absolute_Fixed_APK
-          path: ha_absolute_fixed.apk
+          name: Final_Cracked_APK
+          path: ha_final_cracked.apk
