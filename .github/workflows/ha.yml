@@ -1,19 +1,16 @@
-name: HA-APK 联网验证彻底绕过版
+name: HA-APK 终极时间修复版 (解决证书冲突)
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'ha.apk'
 
 jobs:
-  server-bypass:
+  repair:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 环境初始化
+      - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 安装逆向工具
+      - name: 2. 准备工具
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
@@ -22,43 +19,51 @@ jobs:
       - name: 3. 反编译
         run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 4. 执行“响应体”拦截手术
+      - name: 4. 执行“全量授权”手术
         run: |
           cd ha_workdir
-          echo "--- 启动联网逻辑拦截 ---"
+          echo "--- 正在重构逻辑 ---"
 
-          # [A] 核心：拦截 OkHttp/联网回调中的字符串处理
-          # 寻找包含 "onResponse" 或 "success" 的处理类
-          # 无论服务器返回什么 JSON，我们都强制让 contains("success") 返回 true
-          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "contains" | xargs -I {} bash -c '
-            sed -i "s/move-result v0/const\/4 v0, 0x1\n    # move-result v0/g" {}
-          ' || true
-
-          # [B] 劫持 JSON 解析 (让所有判断状态的方法返回 1)
-          # 很多 App 会解析 {"code": 200}，我们让所有返回整型的方法在被检查时都变成 200 或 1
-          grep -rlE "getCode|getStatus|isSuccess" . --include="*.smali" | xargs -I {} sed -i '/.method.*I/,/.end method/ s/return v[0-9]/const\/16 v0, 0xc8\n    return v0/g' {} || true
-
-          # [C] 强制 SharedPreferences 保持激活 (双重保险)
+          # [A] 解决证书与时间：强制 SharedPreferences 
           TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ -n "$TARGET" ]; then
+              # 强行返回 2099 年时间字符串
+              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/c \.method public final getString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;\n    .locals 1\n    const-string v0, "2099-12-31 23:59:59"\n    return-object v0\n.end method' "$TARGET"
+              # 强行返回已激活
               sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/c \.method public final getBoolean(Ljava/lang/String;Z)Z\n    .locals 1\n    const/4 v0, 0x1\n    return v0\n.end method' "$TARGET"
           fi
 
-          # [D] 屏蔽域名
-          # 将原验证域名指向 127.0.0.1，防止它真的去连服务器拿到“失败”的回复
-          find . -name "*.smali" | xargs sed -i 's/gaosha\.net/127.0.0.1/g' 2>/dev/null || true
+          # [B] 针对 JavaScript 脚本层劫持 (Auto.js 核心)
+          # 既然有 org/mozilla/javascript，我们直接在所有读取字符串的地方拦截
+          # 只要读取到带有 "time" 或 "date" 的变量，就强行覆盖
+          find . -type f -name "*.smali" | xargs grep -l "Lorg/joda/time" | xargs -I {} bash -c '
+            sed -i "s/move-result-object v0/const-string v0, \"2099-12-31\"\n    # /g" {}
+          ' || true
 
-          echo "--- 联网验证绕过完成 ---"
+          # [C] 暴力跳过 equals 比对
+          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "equals" | xargs -I {} \
+            sed -i "s/move-result v0/const\/4 v0, 0x1/g" {} || true
 
-      - name: 5. 重构打包
+          # [D] 物理屏蔽退出
+          find . -name "*.smali" | xargs sed -i "s/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/nop/g" || true
+
+          echo "--- 修复完成 ---"
+
+      - name: 5. 重构 APK
+        run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
+
+      - name: 6. 物理对齐
+        run: zipalign -f -p -v 4 unsigned.apk aligned.apk
+
+      - name: 7. 执行签名 (修复 Alias 冲突)
         run: |
-          java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
-          zipalign -f -p -v 4 unsigned.apk aligned.apk
+          # 关键点：物理删除旧证书，防止重复
+          rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_server_bypass.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_final_v10.apk aligned.apk
 
-      - name: 6. 导出成品
+      - name: 8. 发布
         uses: actions/upload-artifact@v4
         with:
-          name: Server_Bypass_APK
-          path: ha_server_bypass.apk
+          name: Fixed_Final_V10
+          path: ha_final_v10.apk
