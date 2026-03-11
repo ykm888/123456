@@ -1,4 +1,4 @@
-name: HA-APK 精准修复版 (解决 Smali 语法错误)
+name: AutoJS-APK 语法修正版 (解决 AppUtils 编译错误)
 
 on:
   workflow_dispatch:
@@ -25,59 +25,60 @@ jobs:
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 4. 反编译 (不反编译资源)
+      - name: 4. 反编译 (保持资源原始状态)
         run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 5. 执行安全注入 (修正语法错误)
+      - name: 5. 执行精准注入 (修正语法冲突)
         run: |
           cd ha_workdir
-          echo "--- 启动安全注入手术 ---"
+          echo "--- 启动 AutoJS 框架定向手术 ---"
 
-          # [A] 精准权限注入：仅修改 SharedPreferencesView
+          # [A] 修正 SharedPreferencesView：权限注入
           TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ -n "$TARGET" ]; then
-              echo "修改权限类: $TARGET"
-              # 在 .locals 声明后直接插入返回值，确保语法正确
+              echo "注入权限类: $TARGET"
+              # 找到 .locals 后注入，不破坏 return 结构
               sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/ s/return v0/const\/4 v0, 0x1\n    return v0/g' "$TARGET"
               sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/ s/return-object v0/const-string v0, "VIP"\n    return-object v0/g' "$TARGET"
           fi
 
-          # [B] 安全的签名绕过：避开 androidx/google 等系统路径
-          # 只在非系统目录下寻找 getPackageInfo
-          find . -type f -name "*.smali" ! -path "./smali/androidx/*" ! -path "./smali/android/*" ! -path "./smali/com/google/*" | xargs grep -l "getPackageInfo" | xargs -I {} bash -c '
-            echo "正在注入签名伪装: {}"
-            # 找到 move-result-object 这一行，在它后面直接强行改写寄存器，不删除原逻辑以防破坏堆栈
+          # [B] 修正签名验证 (AppUtils 报错点)
+          # 使用 a 命令在匹配行后追加，确保不破坏 Smali 指令块结构
+          # 排除系统类，只改业务类和 AutoJS 运行库
+          find . -type f -name "*.smali" ! -path "./smali/androidx/*" ! -path "./smali/android/*" | xargs grep -l "getPackageInfo" | xargs -I {} bash -c '
+            echo "注入签名伪装: {}"
+            # 找到 move-result-object v0，并在其后追加覆盖指令
             sed -i "/move-result-object v0/a \    const-object v0, v1" {}
           ' || true
 
-          # [C] 暴力破解卡密比对点 (随便输都能进)
-          # 修正 equals 的 sed 逻辑，确保只在 move-result v0 后修改
+          # [C] 万能卡密通过 (equals 劫持)
+          # 同样使用追加法，不替换，只覆盖结果
           find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "equals" | xargs -I {} \
-            sed -i "s/move-result v0/const\/4 v0, 0x1/g" {} || true
+            sed -i "/move-result v0/a \    const/4 v0, 0x1" {} || true
 
-          # [D] 物理擦除 System.exit (防自杀补丁)
-          # 使用更温和的 nop 替换，不改变行数
+          # [D] 屏蔽 System.exit (防止闪退自杀)
+          # 把整个退出指令注释掉
           grep -rl "Ljava/lang/System;->exit" . --include="*.smali" | xargs -I {} \
-            sed -i "s/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/nop/g" {} || true
+            sed -i "s/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/# invoke-static/g" {} || true
 
-          echo "--- 注入完成 ---"
+          echo "--- 手术完成 ---"
 
       - name: 6. 回编译 APK
         run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
 
-      - name: 7. 物理对齐
+      - name: 7. 执行物理对齐
         run: |
           rm -f aligned.apk
           zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 8. 执行签名
+      - name: 8. 执行 V1/V2/V3 全量签名
         run: |
-          rm -f debug.keystore ha_fixed_v3.apk
+          rm -f debug.keystore ha_fixed_v4.apk
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_fixed_v3.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_fixed_v4.apk aligned.apk
 
-      - name: 9. 上传产物
+      - name: 9. 发布最终成品
         uses: actions/upload-artifact@v4
         with:
-          name: Fixed_HA_V3
-          path: ha_fixed_v3.apk
+          name: AutoJS_Fixed_APK
+          path: ha_fixed_v4.apk
