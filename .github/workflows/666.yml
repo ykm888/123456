@@ -21,26 +21,23 @@ jobs:
         run: |
           echo "开始执行 34 版物理暴力修复..."
 
-          # 1. 物理致盲：CrashHandler (防止任何异常导致闪退)
+          # 1. 物理致盲：CrashHandler (修复 sed 语法错误)
           CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
           if [ ! -z "$CRASH_HANDLER" ]; then
             echo "注入 CrashHandler: $CRASH_HANDLER"
-            sed -i '/.method public uncaughtException(Ljava/lang/Thread;Ljava/lang/Throwable;)V/,/return-void/ {
-              /.locals/ a\    return-void
-            }' "$CRASH_HANDLER"
+            # 使用更稳健的直接替换法，避免 a 命令的换行符兼容性问题
+            sed -i '/.locals/a \    return-void' "$CRASH_HANDLER"
           fi
 
-          # 2. 暴力注入：SharedPreferencesView (授权布尔值强制为 True)
+          # 2. 暴力注入：SharedPreferencesView (修复 sed 语法错误)
           PREFS_VIEW=$(find . -name "SharedPreferencesView.smali" | head -n 1)
           if [ ! -z "$PREFS_VIEW" ]; then
             echo "注入 SharedPreferencesView: $PREFS_VIEW"
-            sed -i '/.method public final getBoolean(Ljava/lang/String;Z)Z/,/return/ {
-              /.locals/ a\    const/4 v0, 0x1\n    return v0
-            }' "$PREFS_VIEW"
+            # 物理截断：在 getBoolean 方法内部的第一个匹配点插入强制返回
+            sed -i '/.method public final getBoolean(Ljava/lang/String;Z)Z/,/return/ { /.locals/a \    const/4 v0, 0x1\n    return v0' "$PREFS_VIEW"
           fi
 
           # 3. 像素级劫持：域名污染修复 (main.js)
-          # 将所有潜在的校验域名物理重定向至本地
           if [ -f "main.js" ]; then
             echo "注入 main.js 劫持逻辑"
             sed -i 's/gaosha.net/127.0.0.1/g' main.js
@@ -48,7 +45,6 @@ jobs:
           fi
 
           # 4. 暴力清理：针对常见的 Signatrue 校验类进行返回拦截
-          # 搜索所有包含 checkSignature 的方法并强制返回 1
           grep -rl "checkSignature" . --include="*.smali" | xargs -I {} sed -i '/.method.*checkSignature/,/return/ s/return.*/const\/4 v0, 0x1\n    return v0/g' {} || true
 
       - name: 验证修复成果
@@ -61,5 +57,5 @@ jobs:
           git config --global user.email "bot@pixel-repair.org"
           git config --global user.name "BruteForceBot"
           git add .
-          git diff-index --quiet HEAD || git commit -m "34 版物理修复：全量暴力注入授权逻辑"
+          git diff-index --quiet HEAD || git commit -m "34 版物理修复：修正 sed 注入语法并完成暴力破解"
           git push origin ${{ github.event.inputs.target_branch }}
