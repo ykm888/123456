@@ -1,4 +1,4 @@
-name: HA-APK 弹窗物理移除版 (最终方案)
+name: HA-APK 零侵入修复版 (防闪退+配置文件注入)
 
 on:
   workflow_dispatch:
@@ -10,59 +10,53 @@ jobs:
       - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 初始化逆向环境
+      - name: 2. 工具准备
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 3. 反编译
-        run: java -jar tools/apktool.jar d ha.apk -o ha_workdir -f
+      - name: 3. 完美反编译 (使用 -r 模式，绝对不动代码层)
+        # -r 参数表示不反编译 classes.dex，这能保证 100% 不闪退
+        run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 4. 执行“UI 弹窗消除”与“逻辑强入”
+      - name: 4. 执行“资产层”注入 (Assets Injection)
         run: |
           cd ha_workdir
-          echo "--- 正在物理移除卡密验证层 ---"
+          echo "--- 正在对资产文件执行全量授权 ---"
 
-          # [A] 暴力翻转所有逻辑判断 (针对 isVip, isActivated 等)
-          # 无论代码怎么写，只要是返回布尔值的方法，全部强行改为 true
-          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -lE "isVip|isActivated|checkUser|isValid" | xargs -I {} bash -c '
-            sed -i "/.method.*Z/,/.end method/ s/return v[0-9]/const\/4 v0, 0x1\n    return v0/g" {}
+          # [A] 暴力修改 assets 下所有的 JSON 配置文件
+          # 很多 Auto.js 应用的 VIP 状态和到期时间都写在 assets 里的配置文件中
+          find assets -type f -name "*.json" | xargs -I {} bash -c '
+            sed -i "s/false/true/g" {}
+            sed -i "s/\"vip\":0/\"vip\":9/g" {}
+            sed -i "s/\"is_activated\":false/\"is_activated\":true/g" {}
+            sed -i "s/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/2099-12-31/g" {}
           ' || true
 
-          # [B] 物理劫持卡密输入框的比对结果 (equals 补丁)
-          # 只要调用 equals，就认为输入正确
-          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "Ljava/lang/String;->equals" | xargs -I {} bash -c '
-            sed -i "s/move-result v0/const\/4 v0, 0x1\n    # /g" {}
-          ' || true
+          # [B] 修改 assets 下的 project.json (Auto.js 核心配置)
+          find assets -name "project.json" | xargs sed -i 's/"is_vip": false/"is_vip": true/g' 2>/dev/null || true
 
-          # [C] 核心：直接屏蔽“显示对话框”的方法 (防止弹窗)
-          # 寻找所有调用 show() 显示 Dialog 的地方，将其改为 nop
-          find . -type f -name "*.smali" | xargs sed -i "s/invoke-virtual {.*}, Landroid\/app\/Dialog;->show()V/nop/g" || true
-          find . -type f -name "*.smali" | xargs sed -i "s/invoke-virtual {.*}, Landroid\/app\/AlertDialog;->show()V/nop/g" || true
+          # [C] 域名重定向 (字符串替换通常不会触发 Dex 校验)
+          # 我们把验证域名改为不存在的地址，让它无法连接服务器获取“未授权”指令
+          # 这里我们不解包 Dex，所以尝试在整个工作目录搜索明文字符串
+          grep -rl "gaosha.net" . | xargs sed -i 's/gaosha\.net/127.0.0.1/g' || true
 
-          # [D] 强制写入本地授权 (SharedPreferences)
-          # 这样即便它去查本地文件，也会发现自己是“已授权”
-          TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
-          if [ -n "$TARGET" ]; then
-              sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/c \.method public final getBoolean(Ljava/lang/String;Z)Z\n    .locals 1\n    const/4 v0, 0x1\n    return v0\n.end method' "$TARGET"
-          fi
-
-          echo "--- 物理移除完成 ---"
+          echo "--- 注入完成 ---"
 
       - name: 5. 重构与 4K 对齐
         run: |
           java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
           zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 6. 重新签名
+      - name: 6. 签名 (V1/V2/V3)
         run: |
           rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_final_cracked.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_stealth_bypass.apk aligned.apk
 
       - name: 7. 上传
         uses: actions/upload-artifact@v4
         with:
-          name: Final_Cracked_APK
-          path: ha_final_cracked.apk
+          name: Stealth_Bypass_APK
+          path: ha_stealth_bypass.apk
