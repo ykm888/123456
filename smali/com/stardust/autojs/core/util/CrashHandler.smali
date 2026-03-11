@@ -42,6 +42,7 @@
     .locals 2
     return-void
     return-void
+    return-void
 
     new-instance v0, Lcom/stardust/autojs/core/util/CrashHandler$Companion;
 
