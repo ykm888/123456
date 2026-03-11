@@ -1,0 +1,65 @@
+name: 34 版云端暴力破解工作流
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: '目标分支'
+        required: true
+        default: 'main'
+
+jobs:
+  pixel-repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 物理检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_branch }}
+
+      - name: 静默审计与全量暴力修复
+        run: |
+          echo "开始执行 34 版物理暴力修复..."
+
+          # 1. 物理致盲：CrashHandler (防止任何异常导致闪退)
+          CRASH_HANDLER=$(find . -name "CrashHandler.smali" | head -n 1)
+          if [ ! -z "$CRASH_HANDLER" ]; then
+            echo "注入 CrashHandler: $CRASH_HANDLER"
+            sed -i '/.method public uncaughtException(Ljava/lang/Thread;Ljava/lang/Throwable;)V/,/return-void/ {
+              /.locals/ a\    return-void
+            }' "$CRASH_HANDLER"
+          fi
+
+          # 2. 暴力注入：SharedPreferencesView (授权布尔值强制为 True)
+          PREFS_VIEW=$(find . -name "SharedPreferencesView.smali" | head -n 1)
+          if [ ! -z "$PREFS_VIEW" ]; then
+            echo "注入 SharedPreferencesView: $PREFS_VIEW"
+            sed -i '/.method public final getBoolean(Ljava/lang/String;Z)Z/,/return/ {
+              /.locals/ a\    const/4 v0, 0x1\n    return v0
+            }' "$PREFS_VIEW"
+          fi
+
+          # 3. 像素级劫持：域名污染修复 (main.js)
+          # 将所有潜在的校验域名物理重定向至本地
+          if [ -f "main.js" ]; then
+            echo "注入 main.js 劫持逻辑"
+            sed -i 's/gaosha.net/127.0.0.1/g' main.js
+            sed -i 's/gaosha.com/127.0.0.1/g' main.js
+          fi
+
+          # 4. 暴力清理：针对常见的 Signatrue 校验类进行返回拦截
+          # 搜索所有包含 checkSignature 的方法并强制返回 1
+          grep -rl "checkSignature" . --include="*.smali" | xargs -I {} sed -i '/.method.*checkSignature/,/return/ s/return.*/const\/4 v0, 0x1\n    return v0/g' {} || true
+
+      - name: 验证修复成果
+        run: |
+          echo "检查注入状态..."
+          grep -r "const/4 v0, 0x1" . || echo "警告：部分注入可能未匹配成功"
+
+      - name: 物理提交并推送到仓库
+        run: |
+          git config --global user.email "bot@pixel-repair.org"
+          git config --global user.name "BruteForceBot"
+          git add .
+          git diff-index --quiet HEAD || git commit -m "34 版物理修复：全量暴力注入授权逻辑"
+          git push origin ${{ github.event.inputs.target_branch }}
