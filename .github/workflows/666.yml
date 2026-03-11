@@ -1,4 +1,4 @@
-name: 39版物理修复构建流水线 (V2修复版)
+name: 39版终极物理修复与构建
 
 on:
   workflow_dispatch:
@@ -9,69 +9,83 @@ on:
         default: 'main'
 
 jobs:
-  pixel-repair-and-build:
+  build-and-repair:
     runs-on: ubuntu-latest
     steps:
-      - name: 物理检出代码
+      - name: 1. 物理检出代码
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.target_branch }}
 
-      - name: 配置 Java 17 环境
+      - name: 2. 配置环境 (Java 17 & 工具链)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 安装 Android 构建工具链
+      - name: 3. 安装 Android 物理工具
         run: |
           sudo apt-get update
           sudo apt-get install -y zipalign apksigner
-          echo "工具链安装完成"
-
-      - name: 下载并部署 Apktool 2.9.3
-        run: |
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 执行 39 版物理注入逻辑
+      - name: 4. 执行云端动态注入 (修复闪退逻辑)
         run: |
-          # 给予脚本权限并修复 Windows 换行符
-          chmod +x inject_fix.sh
-          sed -i 's/\r$//' inject_fix.sh
-          ./inject_fix.sh
+          # 动态创建修复脚本，规避文件找不到和大小写问题
+          cat << 'EOF' > cloud_inject.sh
+          #!/bin/bash
+          export LC_ALL=C
+          echo "--- 启动云端物理注入 ---"
 
-      - name: 构建未签名 APK (Build)
-        run: java -jar tools/apktool.jar b . -o unsigned.apk
+          # [A] 寻找目标类 (支持多级目录分包)
+          TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
+          
+          if [ -n "$TARGET" ]; then
+              echo "[命中] 注入目标: $TARGET"
+              # 注入 getBoolean -> 返回 true (0x1) 并修正寄存器计数
+              sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/ s/.locals [0-9]*/.locals 1\n    const\/4 v0, 0x1\n    return v0/g' "$TARGET"
+              # 注入 getString -> 返回 "VIP"
+              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/ s/.locals [0-9]*/.locals 1\n    const-string v0, "VIP"\n    return-object v0/g' "$TARGET"
+              echo "   -> Smali 权限注入完成"
+          else
+              echo "[警告] 未发现 SharedPreferencesView.smali，请检查目录结构"
+          fi
 
-      - name: 物理对齐 (Zipalign) - 修复覆盖冲突
-        # 使用 -f 强制覆盖已存在文件，-p 提升内存加载效率
-        run: zipalign -f -p -v 4 unsigned.apk aligned.apk
+          # [B] 域名劫持 (解决联网校验)
+          [ -f "assets/project/project.json" ] && sed -i 's/gaosha\.net/127.0.0.1/g' "assets/project/project.json" && echo "-> project.json 劫持成功"
+          [ -f "assets/project/ui.js" ] && sed -i 's/gaosha\.net/127.0.0.1/g' "assets/project/ui.js" && echo "-> ui.js 劫持成功"
 
-      - name: 执行 V2/V3 签名 (Apksigner)
+          # [C] 关键修复：移除之前导致闪退的 getPackageInfo 全局置空逻辑
+          # 保证应用能正常获取版本信息，从而不会在启动时因为空指针而秒退。
+          
+          echo "--- 注入完成 ---"
+          EOF
+          
+          chmod +x cloud_inject.sh
+          ./cloud_inject.sh
+
+      - name: 5. 回编译 APK (Build)
+        run: java -jar tools/apktool.jar b . -o original_unsigned.apk
+
+      - name: 6. 物理对齐 (Zipalign) - 强制修复版
+        # -f 强制覆盖 aligned.apk，防止 Output file exists 报错
+        # -p 启用页面对齐，优化 Android 11+ 运行稳定性
+        run: zipalign -f -p -v 4 original_unsigned.apk aligned.apk
+
+      - name: 7. 执行 V2/V3 全量签名 (Apksigner)
         run: |
-          # 物理清理旧签名文件
+          # 清理旧残留
           rm -f debug.keystore build_output.apk
-          
-          # 自动生成临时签名证书
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          
-          # 签署 APK
+          # 生成临时证书
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Google,C=US"
+          # 签署并对齐
           apksigner sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out build_output.apk aligned.apk
-          
-          # 物理校验
+          # 验证签名物理结构
           apksigner verify --verbose build_output.apk
 
-      - name: 提交并推送到代码库
-        run: |
-          git config --global user.email "bot@pixel-repair.org"
-          git config --global user.name "BruteForceBot"
-          git add .
-          git diff-index --quiet HEAD || git commit -m "39版修复：物理对齐与逻辑注入完成"
-          git push origin ${{ github.event.inputs.target_branch }}
-
-      - name: 发布最终产物
+      - name: 8. 发布最终 APK
         uses: actions/upload-artifact@v4
         with:
-          name: Cracked_v39_Fixed_APK
+          name: Fixed_39_Ultimate_APK
           path: build_output.apk
