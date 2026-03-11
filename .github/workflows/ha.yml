@@ -1,4 +1,4 @@
-name: HA-APK 核心级修复 (解决所有闪退)
+name: HA-APK 彻底修复版 (针对未加固优化)
 
 on:
   workflow_dispatch:
@@ -10,66 +10,61 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出代码
+      - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 初始化环境 (Java 17)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: 3. 安装工具链 (Apktool 2.9.3)
+      - name: 2. 准备工具
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 4. 极限反编译 (关键：-r 不动资源)
+      - name: 3. 物理反编译 (核心：-r 不动资源)
         run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 5. 注入“反闪退”核心引擎
+      - name: 4. 执行“微创”手术 (仅修改核心权限类)
         run: |
           cd ha_workdir
-          echo "--- 正在执行核心注入 ---"
+          echo "--- 正在定位权限中枢 ---"
 
-          # [A] 寻找应用的主入口 (通常是第一个包含 onCreate 的类)
-          MAIN_ACTIVITY=$(grep -rl "onCreate(Landroid/os/Bundle;)V" . --include="*.smali" | head -n 1)
-          echo "定位入口类: $MAIN_ACTIVITY"
-
-          # [B] 在入口处强行插入“不准退出”补丁
-          # 这会屏蔽掉所有 System.exit 和 killProcess
-          find . -name "*.smali" | xargs sed -i "s/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/return-void/g" || true
-          find . -name "*.smali" | xargs sed -i "s/invoke-static {.*}, Landroid\/os\/Process;->killProcess(I)V/return-void/g" || true
-
-          # [C] 精准改写 SharedPreferencesView (直接覆盖，不留隐患)
+          # [A] 彻底重写 SharedPreferencesView (这是 Auto.js 存储卡密结果的标准位置)
+          # 寻找此文件，不管它在哪个包名下
           TARGET=$(find . -name "SharedPreferencesView.smali" | head -n 1)
+          
           if [ -n "$TARGET" ]; then
+              echo "找到核心类: $TARGET"
+              # 直接使用 c 命令重写方法体，确保语法 100% 正确，彻底解决 mismatched input 报错
+              
+              # 1. 强行让所有布尔值请求（如 is_activated, is_vip）返回 true
               sed -i '/.method public final getBoolean(Ljava\/lang\/String;Z)Z/,/.end method/c \.method public final getBoolean(Ljava/lang/String;Z)Z\n    .locals 1\n    const/4 v0, 0x1\n    return v0\n.end method' "$TARGET"
-              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/c \.method public final getString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;\n    .locals 1\n    const-string v0, "VIP"\n    return-object v0\n.end method' "$TARGET"
+              
+              # 2. 强行让所有字符串请求（如 user_level, expire_time）返回 VIP 状态
+              sed -i '/.method public final getString(Ljava\/lang\/String;Ljava\/lang\/String;)Ljava\/lang\/String;/,/.end method/c \.method public final getString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;\n    .locals 1\n    const-string v0, "2099-12-31"\n    return-object v0\n.end method' "$TARGET"
           fi
 
-          # [D] 跳过卡密：全局劫持 String.equals 结果
-          # 通过在 move-result v0 后强制覆盖为 1，解决所有比对点
-          find . -type f -name "*.smali" ! -path "./smali/androidx/*" | xargs grep -l "equals" | xargs -I {} \
-            sed -i "s/move-result v0/move-result v0\n    const\/4 v0, 0x1/g" {} || true
+          # [B] 签名校验静默补丁 (针对未加固 App 的通用自杀屏蔽)
+          # 寻找 System.exit 并将其替换为 return-void，让 App 无法自行关闭
+          grep -rl "Ljava/lang/System;->exit" . --include="*.smali" | xargs -I {} sed -i 's/invoke-static {.*}, Ljava\/lang\/System;->exit(I)V/return-void/g' {} || true
+          
+          # [C] 域名劫持
+          find . -name "*.smali" | xargs sed -i 's/gaosha\.net/127.0.0.1/g' 2>/dev/null || true
 
-          echo "--- 注入完成 ---"
+          echo "--- 手术完成 ---"
 
-      - name: 6. 重新编译 (启用 AAPT2 强制对齐)
+      - name: 5. 重新回编译 (开启 AAPT2)
         run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
 
-      - name: 7. 物理对齐 (核心：解决 Android 11+ 闪退)
+      - name: 6. 物理页面对齐
         run: zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 8. 执行三代全签名 (V1+V2+V3)
+      - name: 7. 执行 V2+V3 全量签名
         run: |
-          rm -f debug.keystore ha_fixed_v9.apk
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_fixed_v9.apk aligned.apk
+          rm -f debug.keystore ha_fixed_pro.apk
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Google,C=US"
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_fixed_pro.apk aligned.apk
 
-      - name: 9. 导出产物
+      - name: 8. 发布最终成品
         uses: actions/upload-artifact@v4
         with:
-          name: Nuclear_Fixed_APK
-          path: ha_fixed_v9.apk
+          name: Pro_Fixed_NoKill
+          path: ha_fixed_pro.apk
