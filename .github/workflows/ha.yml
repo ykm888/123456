@@ -1,4 +1,4 @@
-name: HA-APK 彻底断网修复版 (不闪退+物理离线)
+name: HA-APK 零风险断网版 (彻底防闪退)
 
 on:
   workflow_dispatch:
@@ -7,57 +7,57 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出
+      - name: 1. 检出仓库
         uses: actions/checkout@v4
 
-      - name: 2. 初始化
+      - name: 2. 准备逆向工具
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 3. 反编译 (注意：不带 -r，因为我们要改清单文件)
-        run: java -jar tools/apktool.jar d ha.apk -o ha_workdir -f
+      - name: 3. 物理级隔离反编译 (核心：使用 -r 参数)
+        # -r 参数保证 classes.dex 字节码完全不变，彻底绕过 DEX 校验闪退
+        run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 4. 执行“物理断网”手术
+      - name: 4. 执行“隐形”断网与授权注入
         run: |
           cd ha_workdir
-          echo "--- 正在撤销网络权限 ---"
+          echo "--- 正在执行隐形数据注入 ---"
 
-          # [A] 核心：从 AndroidManifest.xml 中物理删除网络权限
-          # 这样系统会直接禁止该 App 联网，App 发起请求会立即报错
-          sed -i '/android.permission.INTERNET/d' AndroidManifest.xml || true
-          sed -i '/android.permission.ACCESS_NETWORK_STATE/d' AndroidManifest.xml || true
-          sed -i '/android.permission.ACCESS_WIFI_STATE/d' AndroidManifest.xml || true
-
-          # [B] 域名/协议 全量污染
-          # 将所有 http 协议头改为不存在的协议，让 OKHttp 等库直接报错
-          find . -type f -name "*.smali" | xargs sed -i 's/http:/offline:/g' 2>/dev/null || true
-          find . -type f -name "*.smali" | xargs sed -i 's/https:/offlines:/g' 2>/dev/null || true
+          # [A] 域名原地爆破 (劫持所有联网请求)
+          # 在整个项目（包含二进制 dex 文件）中搜索域名并替换
+          # 将 gaosha.net 替换为本地回环地址，从物理上掐断连接
+          grep -rl "gaosha.net" . | xargs sed -i 's/gaosha\.net/127.0.0.1/g' 2>/dev/null || true
           
-          # [C] 暴力劫持 Assets 里的授权
-          # 既然断网了，App 必须读取本地缓存，我们要把缓存预填为 VIP
+          # [B] Assets 脚本全量欺骗 (修改这里不会触发闪退)
+          # 针对 Auto.js 脚本逻辑进行强制 VIP 覆盖
           find assets -type f | xargs -I {} bash -c '
             sed -i "s/false/true/g" {} 2>/dev/null
             sed -i "s/\"is_vip\":0/\"is_vip\":1/g" {} 2>/dev/null
+            sed -i "s/\"activated\":false/\"activated\":true/g" {} 2>/dev/null
             sed -i "s/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/2099-12-31/g" {} 2>/dev/null
           ' || true
 
-          echo "--- 断网注入完成 ---"
+          # [C] 针对 project.json 的核心注入
+          find assets -name "project.json" | xargs sed -i 's/"is_vip": false/"is_vip": true/g' 2>/dev/null || true
 
-      - name: 5. 重构与对齐
-        run: |
-          java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
-          zipalign -f -p -v 4 unsigned.apk aligned.apk
+          echo "--- 注入完成 ---"
 
-      - name: 6. 强力签名 (V1/V2/V3)
+      - name: 5. 重构 APK (保持原有 Aapt 结构)
+        run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
+
+      - name: 6. 物理 4K 页面对齐 (解决 Android 11+ 闪退)
+        run: zipalign -f -p -v 4 unsigned.apk aligned.apk
+
+      - name: 7. 执行 V2+V3 强力签名
         run: |
           rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_offline_fixed.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_stealth_offline.apk aligned.apk
 
-      - name: 7. 发布成品
+      - name: 8. 发布
         uses: actions/upload-artifact@v4
         with:
-          name: Offline_Fixed_APK
-          path: ha_offline_fixed.apk
+          name: Stealth_Offline_APK
+          path: ha_stealth_offline.apk
