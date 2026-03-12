@@ -1,4 +1,4 @@
-name: HA-APK 影子修复版 (绝对不闪退)
+name: HA-APK 彻底断网修复版 (不闪退+物理离线)
 
 on:
   workflow_dispatch:
@@ -10,57 +10,54 @@ jobs:
       - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 准备工具
+      - name: 2. 初始化
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 3. 物理级反编译 (核心：-r 保护代码)
-        # 只要带了 -r，classes.dex 就不会被反编译，也就保证了打包后哈希值不变
-        run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
+      - name: 3. 反编译 (注意：不带 -r，因为我们要改清单文件)
+        run: java -jar tools/apktool.jar d ha.apk -o ha_workdir -f
 
-      - name: 4. 执行“资产层”深度注入
+      - name: 4. 执行“物理断网”手术
         run: |
           cd ha_workdir
-          echo "--- 正在对资产文件执行全量伪装 ---"
+          echo "--- 正在撤销网络权限 ---"
 
-          # [A] 暴力覆盖 assets 下所有 JSON/JS 文件的权限标记
-          # 哪怕是加密脚本，里面的字符串常量（如 false, 0）通常也是明文
+          # [A] 核心：从 AndroidManifest.xml 中物理删除网络权限
+          # 这样系统会直接禁止该 App 联网，App 发起请求会立即报错
+          sed -i '/android.permission.INTERNET/d' AndroidManifest.xml || true
+          sed -i '/android.permission.ACCESS_NETWORK_STATE/d' AndroidManifest.xml || true
+          sed -i '/android.permission.ACCESS_WIFI_STATE/d' AndroidManifest.xml || true
+
+          # [B] 域名/协议 全量污染
+          # 将所有 http 协议头改为不存在的协议，让 OKHttp 等库直接报错
+          find . -type f -name "*.smali" | xargs sed -i 's/http:/offline:/g' 2>/dev/null || true
+          find . -type f -name "*.smali" | xargs sed -i 's/https:/offlines:/g' 2>/dev/null || true
+          
+          # [C] 暴力劫持 Assets 里的授权
+          # 既然断网了，App 必须读取本地缓存，我们要把缓存预填为 VIP
           find assets -type f | xargs -I {} bash -c '
             sed -i "s/false/true/g" {} 2>/dev/null
-            sed -i "s/:0/:9/g" {} 2>/dev/null
             sed -i "s/\"is_vip\":0/\"is_vip\":1/g" {} 2>/dev/null
-            sed -i "s/\"activated\":false/\"activated\":true/g" {} 2>/dev/null
-            # 暴力把所有日期格式替换为 2099 年
             sed -i "s/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/2099-12-31/g" {} 2>/dev/null
           ' || true
 
-          # [B] 针对 project.json 的核心注入
-          # Auto.js 应用必读此文件，我们强行改写内部权限
-          find assets -name "project.json" | xargs sed -i 's/"is_vip": false/"is_vip": true/g' 2>/dev/null || true
-          find assets -name "project.json" | xargs sed -i 's/"activated": false/"activated": true/g' 2>/dev/null || true
+          echo "--- 断网注入完成 ---"
 
-          # [C] 域名劫持 (字符串替换通常不会引起 Dex 崩溃)
-          # 注意：即使在 -r 模式下，非代码区的字符串也可以尝试替换
-          grep -rl "gaosha.net" . | xargs sed -i 's/gaosha\.net/127.0.0.1/g' 2>/dev/null || true
+      - name: 5. 重构与对齐
+        run: |
+          java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
+          zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-          echo "--- 注入完成 ---"
-
-      - name: 5. 重构 (使用 AAPT2)
-        run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
-
-      - name: 6. 物理页面对齐
-        run: zipalign -f -p -v 4 unsigned.apk aligned.apk
-
-      - name: 7. 执行强力签名
+      - name: 6. 强力签名 (V1/V2/V3)
         run: |
           rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_shadow_fixed.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_offline_fixed.apk aligned.apk
 
-      - name: 8. 上传成品
+      - name: 7. 发布成品
         uses: actions/upload-artifact@v4
         with:
-          name: Shadow_Fixed_APK
-          path: ha_shadow_fixed.apk
+          name: Offline_Fixed_APK
+          path: ha_offline_fixed.apk
