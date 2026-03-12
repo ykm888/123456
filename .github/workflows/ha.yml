@@ -1,4 +1,4 @@
-name: HA-APK 零风险断网版 (彻底防闪退)
+name: HA-APK 绝对断网版 (彻底切断 IP 连接)
 
 on:
   workflow_dispatch:
@@ -7,57 +7,58 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 检出仓库
+      - name: 1. 检出
         uses: actions/checkout@v4
 
-      - name: 2. 准备逆向工具
+      - name: 2. 初始化
         run: |
           sudo apt-get update && sudo apt-get install -y zipalign apksigner
           mkdir -p tools
           curl -L https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -o tools/apktool.jar
 
-      - name: 3. 物理级隔离反编译 (核心：使用 -r 参数)
-        # -r 参数保证 classes.dex 字节码完全不变，彻底绕过 DEX 校验闪退
+      - name: 3. 物理隔离反编译 (-r 模式保护 DEX)
         run: java -jar tools/apktool.jar d -r ha.apk -o ha_workdir -f
 
-      - name: 4. 执行“隐形”断网与授权注入
+      - name: 4. 执行“全协议”断网手术
         run: |
           cd ha_workdir
-          echo "--- 正在执行隐形数据注入 ---"
+          echo "--- 正在物理掐断所有网络协议 ---"
 
-          # [A] 域名原地爆破 (劫持所有联网请求)
-          # 在整个项目（包含二进制 dex 文件）中搜索域名并替换
-          # 将 gaosha.net 替换为本地回环地址，从物理上掐断连接
-          grep -rl "gaosha.net" . | xargs sed -i 's/gaosha\.net/127.0.0.1/g' 2>/dev/null || true
+          # [A] 协议头爆破：将 http/https 替换为非法字符
+          # 这样即便它用 IP 访问 (如 http://1.2.3.4)，也会因为协议不支持而崩溃/报错
+          # 我们在整个项目目录执行替换
+          grep -rl "http://" . | xargs sed -i 's/http:\/\//null:\/\//g' 2>/dev/null || true
+          grep -rl "https://" . | xargs sed -i 's/https:\/\//nulls:\/\//g' 2>/dev/null || true
+
+          # [B] IP 地址模糊匹配替换
+          # 针对可能的硬编码 IP (如 123.123.123.123) 执行批量屏蔽
+          # 我们把所有看起来像 IP 的字符串都重定向到 0.0.0.0
+          find . -type f -name "*" | xargs sed -i -E 's/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/0.0.0.0/g' 2>/dev/null || true
+
+          # [C] 资产层强行“本地化”
+          # 既然断网了，App 必须依赖 project.json 里的本地配置
+          find assets -type f -name "project.json" | xargs sed -i 's/"is_vip": false/"is_vip": true/g' 2>/dev/null || true
+          find assets -type f -name "project.json" | xargs sed -i 's/"activated": false/"activated": true/g' 2>/dev/null || true
           
-          # [B] Assets 脚本全量欺骗 (修改这里不会触发闪退)
-          # 针对 Auto.js 脚本逻辑进行强制 VIP 覆盖
-          find assets -type f | xargs -I {} bash -c '
-            sed -i "s/false/true/g" {} 2>/dev/null
-            sed -i "s/\"is_vip\":0/\"is_vip\":1/g" {} 2>/dev/null
-            sed -i "s/\"activated\":false/\"activated\":true/g" {} 2>/dev/null
-            sed -i "s/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/2099-12-31/g" {} 2>/dev/null
-          ' || true
+          # [D] 暴力清除所有可能存在的备用域名
+          grep -rl "net" . | xargs sed -i 's/\.net/\.lock/g' 2>/dev/null || true
+          grep -rl "com" . | xargs sed -i 's/\.com/\.lock/g' 2>/dev/null || true
 
-          # [C] 针对 project.json 的核心注入
-          find assets -name "project.json" | xargs sed -i 's/"is_vip": false/"is_vip": true/g' 2>/dev/null || true
+          echo "--- 物理断网完成 ---"
 
-          echo "--- 注入完成 ---"
+      - name: 5. 重构与 4K 对齐
+        run: |
+          java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
+          zipalign -f -p -v 4 unsigned.apk aligned.apk
 
-      - name: 5. 重构 APK (保持原有 Aapt 结构)
-        run: java -jar tools/apktool.jar b ha_workdir -o unsigned.apk --use-aapt2
-
-      - name: 6. 物理 4K 页面对齐 (解决 Android 11+ 闪退)
-        run: zipalign -f -p -v 4 unsigned.apk aligned.apk
-
-      - name: 7. 执行 V2+V3 强力签名
+      - name: 6. 重新签名
         run: |
           rm -f debug.keystore
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android,O=Repair,C=US"
-          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_stealth_offline.apk aligned.apk
+          apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out ha_absolute_offline.apk aligned.apk
 
-      - name: 8. 发布
+      - name: 7. 上传
         uses: actions/upload-artifact@v4
         with:
-          name: Stealth_Offline_APK
-          path: ha_stealth_offline.apk
+          name: Absolute_Offline_APK
+          path: ha_absolute_offline.apk
