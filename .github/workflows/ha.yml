@@ -1,0 +1,51 @@
+name: Extract Resources from ha.apk
+
+on:
+  workflow_dispatch:   # 手动触发
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install apktool
+        run: |
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          chmod +x apktool
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
+          sudo mv apktool /usr/local/bin/apktool
+          apktool --version
+
+      - name: Decompile ha.apk
+        run: |
+          # 强制覆盖已有的 clean_resources 目录
+          apktool d ha.apk -o clean_resources -f
+
+      - name: Package resources
+        run: |
+          cd clean_resources
+          zip -r ../clean_resources.zip .
+          cd ..
+
+      - name: Upload resources artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-resources
+          path: clean_resources.zip
+
+      # 可选：将资源包推送到仓库（创建新分支）
+      - name: Push to resources branch (optional)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b clean-resources || git checkout clean-resources
+          # 删除旧内容并替换为新的反编译结果
+          rm -rf *
+          cp -r clean_resources/* .
+          git add .
+          git commit -m "Update clean resources from ha.apk" || echo "No changes to commit"
+          git push --force origin clean-resources
+        # 注意：如果不需要推送到仓库，可以注释掉此步骤
