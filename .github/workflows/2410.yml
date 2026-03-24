@@ -24,28 +24,24 @@ jobs:
       
       - name: 验证项目结构
         run: |
-          # 检查必要文件
           if [ ! -f "main.js" ]; then
             echo "❌ 错误：未找到 main.js"
             exit 1
           fi
           if [ ! -f "project.json" ]; then
             echo "⚠️ 警告：未找到 project.json，将自动生成"
-            cat > project.json << 'EOF'
-{
+            echo '{
   "name": "快手抖音带货助手",
   "versionName": "${{ github.event.inputs.version_name }}",
   "versionCode": ${{ github.event.inputs.version_code }},
   "packageName": "com.yourname.kuaishoubot",
   "main": "main.js"
-}
-EOF
+}' > project.json
           fi
           echo "✅ 项目结构验证通过"
       
       - name: 更新版本信息
         run: |
-          # 自动更新 project.json 中的版本号
           sed -i "s/\"versionName\": \".*\"/\"versionName\": \"${{ github.event.inputs.version_name }}\"/" project.json
           sed -i "s/\"versionCode\": .*/\"versionCode\": ${{ github.event.inputs.version_code }},/" project.json
           echo "✅ 版本信息已更新"
@@ -53,62 +49,53 @@ EOF
       - name: 语法检查（可选）
         run: |
           echo "🔍 检查 JavaScript 语法..."
-          # 使用 Node.js 检查语法
           if command -v node &> /dev/null; then
             node -c main.js 2>/dev/null && echo "✅ main.js 语法正确" || echo "⚠️ main.js 语法可能有误，请检查"
           fi
       
       - name: 创建发布包
         run: |
-          # 创建发布目录
           mkdir -p release
-          
-          # 复制所有脚本文件
           cp -r ./* release/ 2>/dev/null || true
-          
-          # 删除不需要的文件
           rm -rf release/.git release/.github release/node_modules release/.vscode
           
-          # 创建说明文件
-          cat > release/README.txt << 'EOF'
-========================================
-   快手抖音带货助手 - 安装说明
-========================================
-
-【打包步骤】
-1. 将整个文件夹复制到手机存储中
-2. 打开 Auto.js Pro / AutoX
-3. 点击右上角"+" → "导入项目"
-4. 选择本文件夹
-5. 点击"打包APK"
-6. 填写应用名称、包名、版本号
-7. 选择图标（可选）
-8. 点击"确定"开始打包
-
-【签名说明】
-建议使用自己的签名文件（.jks），不要使用默认测试签名：
-- 打开 Auto.js Pro 打包界面
-- 勾选"使用外部签名"
-- 上传您的 .jks 文件
-- 填写密钥密码
-
-【生成签名文件命令】
-keytool -genkeypair -v \
-  -keystore my-release-key.jks \
-  -keyalg RSA -keysize 2048 \
-  -validity 10000 \
-  -alias my-alias
-
-【版本信息】
-版本名称: ${{ github.event.inputs.version_name }}
-版本号: ${{ github.event.inputs.version_code }}
-构建时间: $(date)
-构建号: ${{ github.run_number }}
-
-========================================
-EOF
+          # 创建说明文件（不使用EOF，改用echo逐行追加）
+          echo "========================================" > release/README.txt
+          echo "   快手抖音带货助手 - 安装说明" >> release/README.txt
+          echo "========================================" >> release/README.txt
+          echo "" >> release/README.txt
+          echo "【打包步骤】" >> release/README.txt
+          echo "1. 将整个文件夹复制到手机存储中" >> release/README.txt
+          echo "2. 打开 Auto.js Pro / AutoX" >> release/README.txt
+          echo "3. 点击右上角'+' → '导入项目'" >> release/README.txt
+          echo "4. 选择本文件夹" >> release/README.txt
+          echo "5. 点击'打包APK'" >> release/README.txt
+          echo "6. 填写应用名称、包名、版本号" >> release/README.txt
+          echo "7. 选择图标（可选）" >> release/README.txt
+          echo "8. 点击'确定'开始打包" >> release/README.txt
+          echo "" >> release/README.txt
+          echo "【签名说明】" >> release/README.txt
+          echo "建议使用自己的签名文件（.jks），不要使用默认测试签名：" >> release/README.txt
+          echo "- 打开 Auto.js Pro 打包界面" >> release/README.txt
+          echo "- 勾选'使用外部签名'" >> release/README.txt
+          echo "- 上传您的 .jks 文件" >> release/README.txt
+          echo "- 填写密钥密码" >> release/README.txt
+          echo "" >> release/README.txt
+          echo "【生成签名文件命令】" >> release/README.txt
+          echo "keytool -genkeypair -v \\" >> release/README.txt
+          echo "  -keystore my-release-key.jks \\" >> release/README.txt
+          echo "  -keyalg RSA -keysize 2048 \\" >> release/README.txt
+          echo "  -validity 10000 \\" >> release/README.txt
+          echo "  -alias my-alias" >> release/README.txt
+          echo "" >> release/README.txt
+          echo "【版本信息】" >> release/README.txt
+          echo "版本名称: ${{ github.event.inputs.version_name }}" >> release/README.txt
+          echo "版本号: ${{ github.event.inputs.version_code }}" >> release/README.txt
+          echo "构建时间: $(date)" >> release/README.txt
+          echo "构建号: ${{ github.run_number }}" >> release/README.txt
+          echo "" >> release/README.txt
+          echo "========================================" >> release/README.txt
           
-          # 打包为 ZIP
           cd release
           zip -r ../kuaishou-bot-v${{ github.event.inputs.version_name }}.zip ./*
           cd ..
