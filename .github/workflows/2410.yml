@@ -1,41 +1,30 @@
-name: Extract Clean Resources from ha.apk
+name: Auto Fix UI Script
 
 on:
   workflow_dispatch:
 
 jobs:
-  extract:
+  fix:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install apktool
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install pycryptodome  # 如果需要加密库，可以安装
+      - name: Decrypt and fix ui.js
+        run: python decrypt_and_fix_ui.py clean_resources_output/assets/project/ui.js ui_fixed.js
+      - name: Replace original ui.js
+        run: mv ui_fixed.js clean_resources_output/assets/project/ui.js
+      - name: Rebuild APK
         run: |
-          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-          chmod +x apktool
-          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
-          sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
-          sudo mv apktool /usr/local/bin/apktool
-
-      - name: Decompile ha.apk
-        run: |
-          # 强制覆盖已有的 clean_resources 目录
-          apktool d ha.apk -o clean_resources -f
-
-      - name: Upload clean resources as artifact
+          apktool b clean_resources_output -o fixed.apk
+          zipalign -v -p 4 fixed.apk aligned.apk
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore -storepass android aligned.apk androiddebugkey
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: clean-resources
-          path: clean_resources
-
-      - name: Push clean resources to repository
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # 将 clean_resources 内容复制到仓库根目录的 clean_resources 目录（可调整）
-          cp -r clean_resources clean_resources_output
-          # 如果已经存在 clean_resources_output 目录，git add 会覆盖
-          git add clean_resources_output
-          git commit -m "Extract clean resources from ha.apk" || echo "No changes to commit"
-          git push
+          name: fixed-apk
+          path: aligned.apk
