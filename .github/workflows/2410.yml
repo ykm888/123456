@@ -1,0 +1,42 @@
+name: Extract Clean Resources
+
+on:
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install apktool
+        run: |
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          chmod +x apktool
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
+          sudo mv apktool /usr/local/bin/apktool
+
+      - name: Decompile ha.apk (overwrite)
+        run: |
+          apktool d ha.apk -o clean_resources -f
+
+      - name: Upload clean resources as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-resources
+          path: clean_resources
+
+      # 可选：将清理后的资源推送到仓库（覆盖原目录）
+      - name: Push clean resources to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 删除旧的资源目录（如果存在）
+          rm -rf clean_resources_old
+          # 将新资源复制到仓库根目录（或指定目录）
+          cp -r clean_resources clean_resources_clean
+          git add clean_resources_clean
+          git commit -m "Extract clean resources from ha.apk" || echo "No changes to commit"
+          git push
