@@ -1,0 +1,92 @@
+.class public final enum Lu/g$b;
+.super Lu/g;
+.source "SourceFile"
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Lu/g;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x4009
+    name = null
+.end annotation
+
+
+# direct methods
+.method public constructor <init>()V
+    .locals 3
+
+    const-string v0, "FORMAT_21S"
+
+    const/16 v1, 0xa
+
+    const/4 v2, 0x0
+
+    invoke-direct {p0, v0, v1, v2}, Lu/g;-><init>(Ljava/lang/String;ILu/g$k;)V
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public final A(Lu/c;Lu/l;)V
+    .locals 2
+
+    .line 1
+    iget v0, p1, Lu/c;->b:I
+
+    .line 2
+    invoke-virtual {p1}, Lu/c;->a()I
+
+    move-result v1
+
+    .line 3
+    invoke-static {v0, v1}, Lu/g;->v(II)S
+
+    move-result v0
+
+    .line 4
+    invoke-virtual {p1}, Lu/c;->i()S
+
+    move-result p1
+
+    invoke-virtual {p2, v0, p1}, Lu/l;->c(SS)V
+
+    return-void
+.end method
+
+.method public final w(ILu/k;)Lu/c;
+    .locals 9
+
+    and-int/lit16 v2, p1, 0xff
+
+    shr-int/lit8 p1, p1, 0x8
+
+    and-int/lit16 v8, p1, 0xff
+
+    invoke-virtual {p2}, Lu/k;->b()I
+
+    move-result p1
+
+    int-to-short p1, p1
+
+    new-instance p2, Lu/h;
+
+    int-to-long v6, p1
+
+    const/4 v3, 0x0
+
+    const/4 v4, 0x0
+
+    const/4 v5, 0x0
+
+    move-object v0, p2
+
+    move-object v1, p0
+
+    invoke-direct/range {v0 .. v8}, Lu/h;-><init>(Lu/g;IIIIJI)V
+
+    return-object p2
+.end method

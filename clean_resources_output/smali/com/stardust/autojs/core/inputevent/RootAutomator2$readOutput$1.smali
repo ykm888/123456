@@ -1,0 +1,341 @@
+.class final Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;
+.super Lw3/i;
+.source "SourceFile"
+
+# interfaces
+.implements Lc4/p;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingMethod;
+    value = Lcom/stardust/autojs/core/inputevent/RootAutomator2;->readOutput()V
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x19
+    name = null
+.end annotation
+
+.annotation system Ldalvik/annotation/Signature;
+    value = {
+        "Lw3/i;",
+        "Lc4/p<",
+        "Lm4/a0;",
+        "Lu3/d<",
+        "-",
+        "Ls3/h;",
+        ">;",
+        "Ljava/lang/Object;",
+        ">;"
+    }
+.end annotation
+
+.annotation runtime Lw3/e;
+    c = "com.stardust.autojs.core.inputevent.RootAutomator2$readOutput$1"
+    f = "RootAutomator2.kt"
+    l = {}
+    m = "invokeSuspend"
+.end annotation
+
+
+# instance fields
+.field private synthetic L$0:Ljava/lang/Object;
+
+.field public label:I
+
+.field public final synthetic this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+
+
+# direct methods
+.method public constructor <init>(Lcom/stardust/autojs/core/inputevent/RootAutomator2;Lu3/d;)V
+    .locals 0
+    .annotation system Ldalvik/annotation/Signature;
+        value = {
+            "(",
+            "Lcom/stardust/autojs/core/inputevent/RootAutomator2;",
+            "Lu3/d<",
+            "-",
+            "Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;",
+            ">;)V"
+        }
+    .end annotation
+
+    iput-object p1, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+
+    const/4 p1, 0x2
+
+    invoke-direct {p0, p1, p2}, Lw3/i;-><init>(ILu3/d;)V
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public final create(Ljava/lang/Object;Lu3/d;)Lu3/d;
+    .locals 2
+    .annotation system Ldalvik/annotation/Signature;
+        value = {
+            "(",
+            "Ljava/lang/Object;",
+            "Lu3/d<",
+            "*>;)",
+            "Lu3/d<",
+            "Ls3/h;",
+            ">;"
+        }
+    .end annotation
+
+    new-instance v0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;
+
+    iget-object v1, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+
+    invoke-direct {v0, v1, p2}, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;-><init>(Lcom/stardust/autojs/core/inputevent/RootAutomator2;Lu3/d;)V
+
+    iput-object p1, v0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->L$0:Ljava/lang/Object;
+
+    return-object v0
+.end method
+
+.method public bridge synthetic invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+    .locals 0
+
+    check-cast p1, Lm4/a0;
+
+    check-cast p2, Lu3/d;
+
+    invoke-virtual {p0, p1, p2}, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->invoke(Lm4/a0;Lu3/d;)Ljava/lang/Object;
+
+    move-result-object p1
+
+    return-object p1
+.end method
+
+.method public final invoke(Lm4/a0;Lu3/d;)Ljava/lang/Object;
+    .locals 0
+    .annotation system Ldalvik/annotation/Signature;
+        value = {
+            "(",
+            "Lm4/a0;",
+            "Lu3/d<",
+            "-",
+            "Ls3/h;",
+            ">;)",
+            "Ljava/lang/Object;"
+        }
+    .end annotation
+
+    invoke-virtual {p0, p1, p2}, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->create(Ljava/lang/Object;Lu3/d;)Lu3/d;
+
+    move-result-object p1
+
+    check-cast p1, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;
+
+    sget-object p2, Ls3/h;->a:Ls3/h;
+
+    invoke-virtual {p1, p2}, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+
+    move-result-object p1
+
+    return-object p1
+.end method
+
+.method public final invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+    .locals 9
+
+    iget v0, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->label:I
+
+    if-nez v0, :cond_3
+
+    invoke-static {p1}, Lk/b;->l0(Ljava/lang/Object;)V
+
+    iget-object p1, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->L$0:Ljava/lang/Object;
+
+    check-cast p1, Lm4/a0;
+
+    :try_start_0
+    iget-object v0, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+
+    invoke-static {v0}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->access$getReader$p(Lcom/stardust/autojs/core/inputevent/RootAutomator2;)Ljava/io/DataInputStream;
+
+    move-result-object v0
+
+    iget-object v1, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+    :try_end_0
+    .catchall {:try_start_0 .. :try_end_0} :catchall_3
+
+    const/4 v2, 0x0
+
+    .line 1
+    :cond_0
+    :goto_0
+    :try_start_1
+    invoke-interface {p1}, Lm4/a0;->getCoroutineContext()Lu3/f;
+
+    move-result-object v3
+
+    sget v4, Lm4/a1;->b:I
+
+    sget-object v4, Lm4/a1$b;->e:Lm4/a1$b;
+
+    invoke-interface {v3, v4}, Lu3/f;->get(Lu3/f$b;)Lu3/f$a;
+
+    move-result-object v3
+
+    check-cast v3, Lm4/a1;
+
+    const/4 v4, 0x1
+
+    if-nez v3, :cond_1
+
+    const/4 v3, 0x1
+
+    goto :goto_1
+
+    :cond_1
+    invoke-interface {v3}, Lm4/a1;->a()Z
+
+    move-result v3
+
+    :goto_1
+    if-eqz v3, :cond_2
+
+    .line 2
+    invoke-virtual {v0}, Ljava/io/DataInputStream;->readInt()I
+
+    move-result v3
+
+    if-ne v3, v4, :cond_0
+
+    invoke-virtual {v0}, Ljava/io/DataInputStream;->readInt()I
+
+    move-result v3
+
+    invoke-virtual {v0}, Ljava/io/DataInputStream;->readInt()I
+
+    move-result v4
+
+    invoke-static {v1}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->access$getPendingActionIds$p(Lcom/stardust/autojs/core/inputevent/RootAutomator2;)Landroidx/collection/ArraySet;
+
+    move-result-object v5
+
+    monitor-enter v5
+    :try_end_1
+    .catchall {:try_start_1 .. :try_end_1} :catchall_1
+
+    :try_start_2
+    invoke-static {v1}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->access$getPendingActionIds$p(Lcom/stardust/autojs/core/inputevent/RootAutomator2;)Landroidx/collection/ArraySet;
+
+    move-result-object v6
+
+    .line 3
+    new-instance v7, Ljava/lang/Integer;
+
+    invoke-direct {v7, v3}, Ljava/lang/Integer;-><init>(I)V
+
+    .line 4
+    invoke-virtual {v6, v7}, Landroidx/collection/ArraySet;->remove(Ljava/lang/Object;)Z
+
+    move-result v6
+
+    invoke-static {v1}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->access$getPendingActionIds$p(Lcom/stardust/autojs/core/inputevent/RootAutomator2;)Landroidx/collection/ArraySet;
+
+    move-result-object v7
+
+    const-string v8, "null cannot be cast to non-null type java.lang.Object"
+
+    invoke-static {v7, v8}, Lk/b;->l(Ljava/lang/Object;Ljava/lang/String;)V
+
+    invoke-virtual {v7}, Ljava/lang/Object;->notify()V
+    :try_end_2
+    .catchall {:try_start_2 .. :try_end_2} :catchall_0
+
+    :try_start_3
+    monitor-exit v5
+
+    if-eqz v6, :cond_0
+
+    invoke-virtual {v1}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->getCallback()Lcom/stardust/autojs/core/inputevent/RootAutomator2$ActionCallback;
+
+    move-result-object v5
+
+    if-eqz v5, :cond_0
+
+    const-string v6, ""
+
+    invoke-interface {v5, v3, v4, v6}, Lcom/stardust/autojs/core/inputevent/RootAutomator2$ActionCallback;->onResult(IILjava/lang/String;)V
+
+    goto :goto_0
+
+    :catchall_0
+    move-exception p1
+
+    monitor-exit v5
+
+    throw p1
+    :try_end_3
+    .catchall {:try_start_3 .. :try_end_3} :catchall_1
+
+    :catchall_1
+    move-exception p1
+
+    goto :goto_2
+
+    :cond_2
+    :try_start_4
+    invoke-static {v0, v2}, Lk/b;->o(Ljava/io/Closeable;Ljava/lang/Throwable;)V
+    :try_end_4
+    .catchall {:try_start_4 .. :try_end_4} :catchall_3
+
+    goto :goto_3
+
+    :goto_2
+    :try_start_5
+    throw p1
+    :try_end_5
+    .catchall {:try_start_5 .. :try_end_5} :catchall_2
+
+    :catchall_2
+    move-exception v1
+
+    :try_start_6
+    invoke-static {v0, p1}, Lk/b;->o(Ljava/io/Closeable;Ljava/lang/Throwable;)V
+
+    throw v1
+    :try_end_6
+    .catchall {:try_start_6 .. :try_end_6} :catchall_3
+
+    :catchall_3
+    move-exception p1
+
+    :try_start_7
+    invoke-virtual {p1}, Ljava/lang/Throwable;->printStackTrace()V
+    :try_end_7
+    .catchall {:try_start_7 .. :try_end_7} :catchall_4
+
+    :goto_3
+    iget-object p1, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+
+    invoke-virtual {p1}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->exit()V
+
+    sget-object p1, Ls3/h;->a:Ls3/h;
+
+    return-object p1
+
+    :catchall_4
+    move-exception p1
+
+    iget-object v0, p0, Lcom/stardust/autojs/core/inputevent/RootAutomator2$readOutput$1;->this$0:Lcom/stardust/autojs/core/inputevent/RootAutomator2;
+
+    invoke-virtual {v0}, Lcom/stardust/autojs/core/inputevent/RootAutomator2;->exit()V
+
+    throw p1
+
+    :cond_3
+    new-instance p1, Ljava/lang/IllegalStateException;
+
+    const-string v0, "call to \'resume\' before \'invoke\' with coroutine"
+
+    invoke-direct {p1, v0}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
+    throw p1
+.end method

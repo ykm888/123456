@@ -1,0 +1,58 @@
+{
+  "assets": [],
+  "build": {
+    "build_id": "C8F2C612-3",
+    "build_number": 3,
+    "build_time": 1668755836234,
+    "release": true
+  },
+  "encryptLevel": 2,
+  "features": {
+    "activityIntentTasks": false,
+    "nodejs": "auto"
+  },
+  "icon": "images/ic_app_logo.png",
+  "launchConfig": {
+    "displaySplash": true,
+    "hideLogs": false,
+    "splashLayoutXml": "splash.xml",
+    "splashText": "欢迎使用",
+    "stableMode": false
+  },
+  "main": "ui.js",
+  "name": "黑湖科技",
+  "optimization": {
+    "obfuscateComponents": true,
+    "removeAccessibilityService": false,
+    "removeOpenCv": false,
+    "unusedResources": false
+  },
+  "packageName": "www.283km5a.com",
+  "permissionConfig": {
+    "requestListOnStartup": [
+      "android.permission.WRITE_EXTERNAL_STORAGE"
+    ]
+  },
+  "plugins": {},
+  "publish": {
+    "category": "",
+    "details": "",
+    "maxAutoJsVersion": 0,
+    "maxProVersion": 0,
+    "minAutoJsVersion": 0,
+    "minProVersion": 0,
+    "minSdkVersion": 0,
+    "permissions": [],
+    "summary": "",
+    "tags": []
+  },
+  "scripts": {},
+  "signingConfig": {
+    "alias": "无极",
+    "keystore": "/storage/emulated/0/脚本/无极.jks",
+    "uuid": "10a90ccc-3165-438a-9c0c-8f014243d025"
+  },
+  "useFeatures": [],
+  "versionCode": 256601,
+  "versionName": "24.2.8"
+}
