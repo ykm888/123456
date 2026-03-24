@@ -1,0 +1,32 @@
+{
+  "name": "快手抖音带货助手",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "packageName": "com.yourname.kuaishoubot",
+  "main": "main.js",
+  "icon": "res/icon.png",
+  "launchConfig": {
+    "hideLogs": true,
+    "displaySplash": true,
+    "splashText": "带货助手启动中...",
+    "stableMode": false
+  },
+  "permissionConfig": {
+    "manifestPermissions": [
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.INTERNET",
+      "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.ACCESS_NETWORK_STATE"
+    ],
+    "requestListOnStartup": [
+      "android.permission.WRITE_EXTERNAL_STORAGE"
+    ]
+  },
+  "optimization": {
+    "removeOpenCv": true,
+    "unusedResources": true
+  },
+  "encryptLevel": 0,
+  "useFeatures": []
+}
