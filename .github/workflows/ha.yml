@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V9
+name: Video-Matrix-APK-Auto-Build-V10
 
 on:
   workflow_dispatch:
@@ -14,38 +14,36 @@ jobs:
         with:
           path: main-repo
 
-      - name: 2. 拉取核心组件 (9版延续 8版镜像源)
+      - name: 2. 拉取核心组件 (10版延续 9版镜像源)
         run: |
-          # 物理拉取：核心去水印 API
           git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./core-api
-          # 物理拉取：搬运逻辑
           git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./ui-logic
-          # 维持 8版 有效镜像源
           git clone https://github.com/hyb1996/Auto.js.git ./android-shell
 
-      - name: 3. 逻辑合并与“物理强插”修复
+      - name: 3. 逻辑合并与“物理插件注入”修复
         run: |
-          echo "开始执行 9版 静默审计：正在物理定位工程并注入资源..."
+          echo "开始执行 10版 静默审计：正在物理构造 Android 模块环境..."
           
-          # 定位有效工程根目录
           FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
-          if [ -z "$FOUND_PATH" ]; then
-            PROJECT_ROOT="./android-shell"
-          else
-            PROJECT_ROOT=$(dirname "$FOUND_PATH")
-          fi
+          if [ -z "$FOUND_PATH" ]; then PROJECT_ROOT="./android-shell"; else PROJECT_ROOT=$(dirname "$FOUND_PATH"); fi
           cd "$PROJECT_ROOT"
 
-          # 物理补齐最小化构建标记 (禁用 EOF)
-          if [ ! -f "settings.gradle" ]; then
-            printf "rootProject.name = 'AutoJs-Matrix-V9'\ninclude ':app'" > settings.gradle
-          fi
+          # 10版修复点：物理强制写入完整的 Android 模块配置 (禁用 EOF)
+          # 1. 强制 settings.gradle 包含 app 模块
+          printf "rootProject.name = 'AutoJs-Matrix-V10'\ninclude ':app'" > settings.gradle
 
-          # 物理移动脚本资源至标准 Android 路径
-          mkdir -p ./app/src/main/assets/scripts || mkdir -p ./src/main/assets/scripts || true
+          # 2. 物理创建 app 目录及 build.gradle
+          mkdir -p ./app
+          printf "apply plugin: 'com.android.application'\nandroid {\n    namespace 'com.matrix.auto'\n    compileSdk 33\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdk 24\n        targetSdk 33\n        versionCode 1\n        versionName '1.0'\n    }\n}\nrepositories { google(); mavenCentral() }" > ./app/build.gradle
+
+          # 3. 物理构建根 build.gradle
+          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > ./build.gradle
+
+          # 物理移动脚本资源至 app 模块的 assets (维持前序逻辑)
+          mkdir -p ./app/src/main/assets/scripts || true
           cp -r $GITHUB_WORKSPACE/ui-logic/* ./app/src/main/assets/scripts/ || true
           
-          # 物理替换 API 接口地址 (延续 1-8 版逻辑)
+          # 物理替换 API 接口地址 (延续 1-9 版逻辑)
           find . -type f -name "*.java" -exec sed -i 's|localhost:8080|127.0.0.1:2333|g' {} +
 
       - name: 4. 设置 Android SDK 环境
@@ -54,23 +52,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (9版优化：物理初始化构建环境)
+      - name: 5. 自动化构建 APK (10版优化：执行物理构建)
         run: |
-          # 重新定位物理路径
           FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
           if [ -z "$FOUND_PATH" ]; then cd ./android-shell; else cd $(dirname "$FOUND_PATH"); fi
           
-          # 物理初始化 Gradle Wrapper (使用 7.6 兼容版)
-          gradle wrapper --gradle-version 7.6
+          # 物理初始化 Gradle Wrapper 8.1
+          gradle wrapper --gradle-version 8.1
           chmod +x gradlew
           
-          # 执行构建：优先编译 Debug 版
-          ./gradlew :app:assembleDebug --stacktrace || ./gradlew assembleDebug
+          # 显式执行 app 模块的构建任务
+          ./gradlew :app:assembleDebug --stacktrace
 
-      - name: 6. 归档与版本定义 (9版修复点：补全 actions/ 命名空间)
+      - name: 6. 归档与版本定义 (延续 9版 修复后的 actions 命名空间)
         uses: actions/upload-artifact@v4
         with:
-          name: Video-Matrix-V9-Release
+          name: Video-Matrix-V10-Release
           path: |
             **/*.apk
             **/build/outputs/apk/**/*.apk
