@@ -1,36 +1,71 @@
-name: Auto Fix UI Script
+name: Fix APK and Bypass Verification
 
 on:
   workflow_dispatch:
 
 jobs:
-  fix:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          python-version: '3.10'
-      - name: Install dependencies
-        run: pip install pycryptodome  # 可选
-      - name: Check file existence and content
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install tools
         run: |
-          echo "=== Checking file path ==="
-          ls -la clean_resources_output/assets/project/ || echo "Directory not found"
-          echo "=== File content preview ==="
-          head -n 20 clean_resources_output/assets/project/ui.js || echo "File not found"
-      - name: Decrypt and fix ui.js
-        run: python decrypt_and_fix_ui.py clean_resources_output/assets/project/ui.js ui_fixed.js
+          sudo apt-get update
+          sudo apt-get install -y zipalign
+          # Install apktool
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          chmod +x apktool
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
+          sudo mv apktool /usr/local/bin/apktool
+          # Verify apktool
+          apktool --version
+
+      - name: Decompile APK
+        run: |
+          # 如果已有反编译目录，先删除
+          rm -rf clean_resources
+          apktool d ha.apk -o clean_resources -f
+
+      - name: Run decryption script
+        run: python3 decrypt_and_fix_ui.py clean_resources/assets/project/ui.js ui_fixed.js
+
       - name: Replace original ui.js
-        run: mv ui_fixed.js clean_resources_output/assets/project/ui.js
-      - name: Rebuild APK
-        run: |
-          apktool b clean_resources_output -o fixed.apk
-          zipalign -v -p 4 fixed.apk aligned.apk
-          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore -storepass android aligned.apk androiddebugkey
-      - name: Upload APK
+        run: mv ui_fixed.js clean_resources/assets/project/ui.js
+
+      - name: Upload decrypted strings (for analysis)
         uses: actions/upload-artifact@v4
         with:
-          name: fixed-apk
-          path: aligned.apk
+          name: decrypted-strings
+          path: decrypted_strings.txt
+
+      - name: Rebuild APK
+        run: |
+          apktool b clean_resources -o unsigned.apk
+
+      - name: Align APK
+        run: zipalign -v -p 4 unsigned.apk aligned.apk
+
+      - name: Generate debug keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -keyalg RSA -keysize 2048 -validity 10000 -alias androiddebugkey -storepass android -keypass android -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown"
+
+      - name: Sign APK
+        run: jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore -storepass android aligned.apk androiddebugkey
+
+      - name: Rename final APK
+        run: mv aligned.apk final.apk
+
+      - name: Upload final APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-apk
+          path: final.apk
