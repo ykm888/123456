@@ -1,69 +1,154 @@
-name: Build Auto.js APK
+name: Auto Package Auto.js Script
 
 on:
-  workflow_dispatch:   # 仅手动触发
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: '版本名称'
+        required: true
+        default: '1.0.0'
+        type: string
+      version_code:
+        description: '版本号'
+        required: true
+        default: '1'
+        type: string
 
 jobs:
-  build:
+  package:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      # 关键修改：使用 JDK 17（符合 android-actions/setup-android 要求）
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Install autojs-cli
-        run: npm install -g autojs-cli
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-30 build-tools;30.0.3'
-
-      - name: Prepare keystore
+      
+      - name: 验证项目结构
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-          echo "KEYSTORE_PATH=release.keystore" >> $GITHUB_ENV
-          echo "KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }}" >> $GITHUB_ENV
-          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-
-      - name: Build unsigned APK
+          # 检查必要文件
+          if [ ! -f "main.js" ]; then
+            echo "❌ 错误：未找到 main.js"
+            exit 1
+          fi
+          if [ ! -f "project.json" ]; then
+            echo "⚠️ 警告：未找到 project.json，将自动生成"
+            cat > project.json << 'EOF'
+{
+  "name": "快手抖音带货助手",
+  "versionName": "${{ github.event.inputs.version_name }}",
+  "versionCode": ${{ github.event.inputs.version_code }},
+  "packageName": "com.yourname.kuaishoubot",
+  "main": "main.js"
+}
+EOF
+          fi
+          echo "✅ 项目结构验证通过"
+      
+      - name: 更新版本信息
         run: |
-          mkdir -p dist
-          autojs build \
-            --project ./ \
-            --output ./dist/app-unsigned.apk
-
-      - name: Sign APK
+          # 自动更新 project.json 中的版本号
+          sed -i "s/\"versionName\": \".*\"/\"versionName\": \"${{ github.event.inputs.version_name }}\"/" project.json
+          sed -i "s/\"versionCode\": .*/\"versionCode\": ${{ github.event.inputs.version_code }},/" project.json
+          echo "✅ 版本信息已更新"
+      
+      - name: 语法检查（可选）
         run: |
-          apksigner sign \
-            --ks "$KEYSTORE_PATH" \
-            --ks-key-alias "$KEYSTORE_ALIAS" \
-            --ks-pass pass:"$KEYSTORE_PASSWORD" \
-            --out ./dist/app-signed.apk \
-            ./dist/app-unsigned.apk
-
-      - name: Rename final APK
+          echo "🔍 检查 JavaScript 语法..."
+          # 使用 Node.js 检查语法
+          if command -v node &> /dev/null; then
+            node -c main.js 2>/dev/null && echo "✅ main.js 语法正确" || echo "⚠️ main.js 语法可能有误，请检查"
+          fi
+      
+      - name: 创建发布包
         run: |
-          mv ./dist/app-signed.apk ./dist/kuaishou-bot-${{ github.run_number }}.apk
+          # 创建发布目录
+          mkdir -p release
+          
+          # 复制所有脚本文件
+          cp -r ./* release/ 2>/dev/null || true
+          
+          # 删除不需要的文件
+          rm -rf release/.git release/.github release/node_modules release/.vscode
+          
+          # 创建说明文件
+          cat > release/README.txt << 'EOF'
+========================================
+   快手抖音带货助手 - 安装说明
+========================================
 
-      - name: Upload APK artifact
+【打包步骤】
+1. 将整个文件夹复制到手机存储中
+2. 打开 Auto.js Pro / AutoX
+3. 点击右上角"+" → "导入项目"
+4. 选择本文件夹
+5. 点击"打包APK"
+6. 填写应用名称、包名、版本号
+7. 选择图标（可选）
+8. 点击"确定"开始打包
+
+【签名说明】
+建议使用自己的签名文件（.jks），不要使用默认测试签名：
+- 打开 Auto.js Pro 打包界面
+- 勾选"使用外部签名"
+- 上传您的 .jks 文件
+- 填写密钥密码
+
+【生成签名文件命令】
+keytool -genkeypair -v \
+  -keystore my-release-key.jks \
+  -keyalg RSA -keysize 2048 \
+  -validity 10000 \
+  -alias my-alias
+
+【版本信息】
+版本名称: ${{ github.event.inputs.version_name }}
+版本号: ${{ github.event.inputs.version_code }}
+构建时间: $(date)
+构建号: ${{ github.run_number }}
+
+========================================
+EOF
+          
+          # 打包为 ZIP
+          cd release
+          zip -r ../kuaishou-bot-v${{ github.event.inputs.version_name }}.zip ./*
+          cd ..
+          
+          echo "✅ 打包完成"
+      
+      - name: 上传脚本包
         uses: actions/upload-artifact@v4
         with:
-          name: kuaishou-bot
-          path: ./dist/*.apk
+          name: kuaishou-bot-v${{ github.event.inputs.version_name }}
+          path: kuaishou-bot-v${{ github.event.inputs.version_name }}.zip
+          compression-level: 0
+      
+      - name: 创建 Release（可选）
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version_name }}
+          name: Release v${{ github.event.inputs.version_name }}
+          body: |
+            ## 快手抖音带货助手 v${{ github.event.inputs.version_name }}
+            
+            ### 版本信息
+            - 版本号: ${{ github.event.inputs.version_code }}
+            - 构建号: ${{ github.run_number }}
+            
+            ### 使用说明
+            1. 下载 ZIP 包并解压到手机
+            2. 用 Auto.js Pro 打开项目
+            3. 点击打包生成 APK
+            
+            ### 文件清单
+            - `main.js` - 主脚本入口
+            - `modules/` - 功能模块目录
+            - `config.js` - 配置文件
+            - `project.json` - 项目配置
+            
+            ### 更新内容
+            ${{ github.event.head_commit.message }}
+          files: |
+            ./kuaishou-bot-v${{ github.event.inputs.version_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
