@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V4
+name: Video-Matrix-APK-Auto-Build-V8
 
 on:
   workflow_dispatch:
@@ -14,36 +14,39 @@ jobs:
         with:
           path: main-repo
 
-      - name: 2. 拉取核心组件 (静默审计模式)
+      - name: 2. 拉取核心组件 (8 版修复：物理更换为可访问的镜像源)
         run: |
-          # 物理拉取核心组件
+          # 物理拉取：核心去水印 API
           git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./core-api
+          # 物理拉取：搬运逻辑
           git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./ui-logic
-          git clone https://github.com/yikart/AiToEarn.git ./android-shell
+          # 8 版修复点：更换为目前物理可访问的 Auto.js 开源镜像仓库
+          git clone https://github.com/hyb1996/Auto.js.git ./android-shell
 
-      - name: 3. 逻辑合并与“原文照抄”修复
+      - name: 3. 逻辑合并与“物理强插”修复 (遵循 7 版审计逻辑)
         run: |
-          echo "开始执行 4版 静默审计：正在物理定位并防止空变量崩溃..."
+          echo "开始执行 8 版 静默审计：正在物理定位工程并注入资源..."
           
-          # 物理搜索 settings.gradle，增加判空保护
+          # 定位有效工程根目录 (寻找 settings.gradle)
           FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
-          
           if [ -z "$FOUND_PATH" ]; then
-            echo "警告：未发现 settings.gradle，使用默认根目录 ./android-shell"
             PROJECT_ROOT="./android-shell"
           else
             PROJECT_ROOT=$(dirname "$FOUND_PATH")
-            echo "物理定位成功：$PROJECT_ROOT"
           fi
-
           cd "$PROJECT_ROOT"
 
-          # 物理移动脚本资源 (维持前序版本逻辑)
-          mkdir -p ./src/main/assets/scripts || true
-          # 使用绝对路径确保拷贝准确
-          cp -r $GITHUB_WORKSPACE/ui-logic/* ./src/main/assets/scripts/ || true
+          # 物理补齐最小化构建标记 (禁用 EOF)
+          if [ ! -f "settings.gradle" ]; then
+            printf "rootProject.name = 'AutoJs-Matrix-V8'\ninclude ':app'" > settings.gradle
+          fi
+
+          # 物理移动脚本资源：将 ui-logic 注入到安卓 assets/scripts
+          # 针对 Auto.js 源码结构，assets 通常在 app/src/main/assets
+          mkdir -p ./app/src/main/assets/scripts || mkdir -p ./src/main/assets/scripts || true
+          cp -r $GITHUB_WORKSPACE/ui-logic/* ./app/src/main/assets/scripts/ || true
           
-          # 修复 API 调用地址 (维持前序版本逻辑)
+          # 物理替换 API 接口地址 (延续 1-7 版修复逻辑)
           find . -type f -name "*.java" -exec sed -i 's|localhost:8080|127.0.0.1:2333|g' {} +
 
       - name: 4. 设置 Android SDK 环境
@@ -52,30 +55,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (4版修复点：鲁棒性路径处理)
+      - name: 5. 自动化构建 APK (8 版修复：适配老旧 Gradle 版本兼容性)
         run: |
-          # 重新物理定位
+          # 重新定位物理路径
           FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
-          if [ -z "$FOUND_PATH" ]; then
-            cd ./android-shell
-          else
-            cd $(dirname "$FOUND_PATH")
-          fi
+          if [ -z "$FOUND_PATH" ]; then cd ./android-shell; else cd $(dirname "$FOUND_PATH"); fi
           
-          # 物理补齐构建环境
-          if [ ! -f "gradlew" ]; then
-            echo "正在物理初始化 Gradle 环境..."
-            gradle init --type java-application --dsl gradle || gradle wrapper
-          fi
-          
+          # 物理初始化/修复 Gradle Wrapper
+          # 许多老旧 Auto.js 仓库需要较低版本的 Gradle，先尝试 7.6 兼容版
+          gradle wrapper --gradle-version 7.6
           chmod +x gradlew
-          # 执行构建
-          ./gradlew assembleRelease --stacktrace || echo "构建暂未完成，请检查项目源码结构是否完整。"
+          
+          # 执行构建：优先编译 Debug 版
+          ./gradlew :app:assembleDebug --stacktrace || ./gradlew assembleDebug
 
       - name: 6. 归档与版本定义
-        uses: actions/upload-artifact@v4
+        uses: upload-artifact@v4
         with:
-          name: Video-Matrix-V4-Release
+          name: Video-Matrix-V8-Release
           path: |
             **/*.apk
-            **/build/outputs/apk/**/*.apk
