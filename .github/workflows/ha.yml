@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V14
+name: Video-Matrix-APK-Auto-Build-V15
 
 on:
   workflow_dispatch:
@@ -9,57 +9,55 @@ jobs:
   Physical-Audit-and-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 物理环境准备 (14版：强制物理空间初始化)
+      - name: 1. 物理环境准备 (15版：初始化 workspace)
         run: |
           mkdir -p workspace/app/src/main/assets/scripts
-          echo "物理工作空间已建立。"
+          echo "15版 物理工作空间就绪。"
 
-      - name: 2. 拉取组件并物理归位
+      - name: 2. 拉取组件并物理归位 (15版延续逻辑)
         run: |
-          # 物理拉取到临时目录
           git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./temp-api
           git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./temp-ui
           git clone https://github.com/hyb1996/Auto.js.git ./temp-shell
           
-          # 物理迁移：将源码核心文件强制移动到 workspace
           cp -r ./temp-shell/. ./workspace/
           cp -r ./temp-ui/* ./workspace/app/src/main/assets/scripts/ || true
           echo "组件物理归位完成。"
 
-      - name: 3. 彻底解决：物理强插构建全家桶 (禁用 EOF)
+      - name: 3. 核心修复：物理构建文件重写 (针对 Gradle 9.4 优化)
         run: |
           cd workspace
-          # 14版修复点：物理强制写入 settings.gradle
-          printf "rootProject.name = 'AutoMatrixV14'\ninclude ':app'" > settings.gradle
+          # 15版修复点：物理写入 settings.gradle
+          printf "rootProject.name = 'AutoMatrixV15'\ninclude ':app'" > settings.gradle
 
-          # 14版修复点：物理强制写入根 build.gradle (指定 7.4.2 插件)
-          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies {\n        classpath 'com.android.tools.build:gradle:7.4.2'\n    }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
+          # 15版修复点：物理写入根 build.gradle
+          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies {\n        classpath 'com.android.tools.build:gradle:8.1.0'\n    }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
 
-          # 14版修复点：物理强制写入 app/build.gradle
-          printf "apply plugin: 'com.android.application'\nandroid {\n    compileSdkVersion 33\n    namespace 'com.matrix.auto'\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdkVersion 24\n        targetSdkVersion 33\n    }\n}\nrepositories { google(); mavenCentral() }" > ./app/build.gradle
+          # 15版修复点：物理写入 app/build.gradle (显式指定编译兼容性)
+          printf "apply plugin: 'com.android.application'\nandroid {\n    namespace 'com.matrix.auto'\n    compileSdk 33\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdk 24\n        targetSdk 33\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n}\nrepositories { google(); mavenCentral() }" > ./app/build.gradle
 
-          # 14版修复点：物理强制写入 AndroidManifest
+          # 15版修复点：物理注入最小化 AndroidManifest
           printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android' package='com.matrix.auto'>\n    <application android:label='AutoMatrix'>\n        <activity android:name='.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > ./app/src/main/AndroidManifest.xml
 
-      - name: 4. 设置 Java 环境 (14版：锁定 Java 11)
+      - name: 4. 设置 Java 环境 (15版修复点：物理升级至 Java 17)
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (14版：执行暴力初始化构建)
+      - name: 5. 自动化构建 APK (15版执行物理构建)
         run: |
           cd workspace
-          # 14版修复动作：不再依赖之前的 wrapper，直接执行初始化
-          gradle wrapper --gradle-version 7.5
+          # 物理初始化 Gradle Wrapper 8.1 (配合 Java 17)
+          gradle wrapper --gradle-version 8.1
           chmod +x gradlew
-          # 物理执行 Debug 编译
+          # 执行构建
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: 6. 归档与版本定义
         uses: actions/upload-artifact@v4
         with:
-          name: Video-Matrix-V14-Release
+          name: Video-Matrix-V15-Release
           path: |
             workspace/**/*.apk
             workspace/app/build/outputs/apk/**/*.apk
