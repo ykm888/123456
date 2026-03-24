@@ -1,4 +1,4 @@
-name: Extract Clean Resources
+name: Extract Clean Resources from ha.apk
 
 on:
   workflow_dispatch:
@@ -18,8 +18,9 @@ jobs:
           sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
           sudo mv apktool /usr/local/bin/apktool
 
-      - name: Decompile ha.apk (overwrite)
+      - name: Decompile ha.apk
         run: |
+          # 强制覆盖已有的 clean_resources 目录
           apktool d ha.apk -o clean_resources -f
 
       - name: Upload clean resources as artifact
@@ -28,15 +29,13 @@ jobs:
           name: clean-resources
           path: clean_resources
 
-      # 可选：将清理后的资源推送到仓库（覆盖原目录）
       - name: Push clean resources to repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # 删除旧的资源目录（如果存在）
-          rm -rf clean_resources_old
-          # 将新资源复制到仓库根目录（或指定目录）
-          cp -r clean_resources clean_resources_clean
-          git add clean_resources_clean
+          # 将 clean_resources 内容复制到仓库根目录的 clean_resources 目录（可调整）
+          cp -r clean_resources clean_resources_output
+          # 如果已经存在 clean_resources_output 目录，git add 会覆盖
+          git add clean_resources_output
           git commit -m "Extract clean resources from ha.apk" || echo "No changes to commit"
           git push
