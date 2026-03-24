@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V13
+name: Video-Matrix-APK-Auto-Build-V14
 
 on:
   workflow_dispatch:
@@ -9,71 +9,57 @@ jobs:
   Physical-Audit-and-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 物理环境模拟与仓库拉取
-        uses: actions/checkout@v4
-        with:
-          path: main-repo
-
-      - name: 2. 拉取核心组件 (13版维持镜像源)
+      - name: 1. 物理环境准备 (14版：强制物理空间初始化)
         run: |
-          git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./core-api
-          git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./ui-logic
-          git clone https://github.com/hyb1996/Auto.js.git ./android-shell
+          mkdir -p workspace/app/src/main/assets/scripts
+          echo "物理工作空间已建立。"
 
-      - name: 3. 彻底修复：物理生成并对齐构建环境
+      - name: 2. 拉取组件并物理归位
         run: |
-          echo "开始执行 13版 静默审计：物理强制生成 gradlew 及其配置..."
+          # 物理拉取到临时目录
+          git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./temp-api
+          git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./temp-ui
+          git clone https://github.com/hyb1996/Auto.js.git ./temp-shell
           
-          # 确定项目物理根目录
-          FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
-          if [ -z "$FOUND_PATH" ]; then PROJECT_ROOT="./android-shell"; else PROJECT_ROOT=$(dirname "$FOUND_PATH"); fi
-          cd "$PROJECT_ROOT"
+          # 物理迁移：将源码核心文件强制移动到 workspace
+          cp -r ./temp-shell/. ./workspace/
+          cp -r ./temp-ui/* ./workspace/app/src/main/assets/scripts/ || true
+          echo "组件物理归位完成。"
 
-          # 13版修复点：物理生成 Gradle Wrapper (核心：解决 chmod 找不到文件的问题)
-          gradle wrapper --gradle-version 7.5
+      - name: 3. 彻底解决：物理强插构建全家桶 (禁用 EOF)
+        run: |
+          cd workspace
+          # 14版修复点：物理强制写入 settings.gradle
+          printf "rootProject.name = 'AutoMatrixV14'\ninclude ':app'" > settings.gradle
 
-          # 13版修复点：物理锁定 Gradle 版本配置 (禁用 EOF)
-          mkdir -p gradle/wrapper
-          printf "distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\ndistributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-
-          # 物理重写构建描述 (延续 12版 兼容逻辑)
-          printf "rootProject.name = 'AutoMatrixV13'\ninclude ':app'" > settings.gradle
+          # 14版修复点：物理强制写入根 build.gradle (指定 7.4.2 插件)
           printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies {\n        classpath 'com.android.tools.build:gradle:7.4.2'\n    }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
 
-          # 物理重写 app 模块与注入资源
-          mkdir -p ./app/src/main/assets/scripts || true
-          printf "apply plugin: 'com.android.application'\nandroid {\n    compileSdkVersion 33\n    namespace 'com.matrix.auto'\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdkVersion 24\n        targetSdkVersion 33\n    }\n}\ndependencies { implementation fileTree(dir: 'libs', include: ['*.jar']) }" > ./app/build.gradle
-          
+          # 14版修复点：物理强制写入 app/build.gradle
+          printf "apply plugin: 'com.android.application'\nandroid {\n    compileSdkVersion 33\n    namespace 'com.matrix.auto'\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdkVersion 24\n        targetSdkVersion 33\n    }\n}\nrepositories { google(); mavenCentral() }" > ./app/build.gradle
+
+          # 14版修复点：物理强制写入 AndroidManifest
           printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android' package='com.matrix.auto'>\n    <application android:label='AutoMatrix'>\n        <activity android:name='.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > ./app/src/main/AndroidManifest.xml
 
-          # 物理移动 ui-logic 脚本
-          cp -r $GITHUB_WORKSPACE/ui-logic/* ./app/src/main/assets/scripts/ || true
-
-      - name: 4. 设置 Java 环境 (13版保持 Java 11 兼容性)
+      - name: 4. 设置 Java 环境 (14版：锁定 Java 11)
         uses: actions/setup-java@v4
         with:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (13版：执行物理权限修复并构建)
+      - name: 5. 自动化构建 APK (14版：执行暴力初始化构建)
         run: |
-          # 物理定位
-          FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
-          if [ -z "$FOUND_PATH" ]; then cd ./android-shell; else cd $(dirname "$FOUND_PATH"); fi
-          
-          # 13版修复动作：确认 gradlew 存在后授予权限
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew :app:assembleDebug --no-daemon --stacktrace
-          else
-            echo "物理生成 gradlew 失败，尝试直接调用系统 gradle 编译..."
-            gradle :app:assembleDebug
-          fi
+          cd workspace
+          # 14版修复动作：不再依赖之前的 wrapper，直接执行初始化
+          gradle wrapper --gradle-version 7.5
+          chmod +x gradlew
+          # 物理执行 Debug 编译
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: 6. 归档与版本定义
         uses: actions/upload-artifact@v4
         with:
-          name: Video-Matrix-V13-Release
+          name: Video-Matrix-V14-Release
           path: |
-            **/*.apk
-            **/build/outputs/apk/**/*.apk
+            workspace/**/*.apk
+            workspace/app/build/outputs/apk/**/*.apk
