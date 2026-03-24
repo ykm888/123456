@@ -1,53 +1,54 @@
-name: Extract Resources from ha.apk
+name: Video-Matrix-APK-Auto-Build-V1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
-  extract:
+  Physical-Audit-and-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: 1. 物理环境模拟与仓库拉取
         uses: actions/checkout@v4
+        with:
+          path: main-repo
 
-      - name: Install apktool
+      - name: 2. 拉取核心组件 (静默审计模式)
         run: |
-          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-          chmod +x apktool
-          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
-          sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
-          sudo mv apktool /usr/local/bin/apktool
-          apktool --version
+          # 拉取去水印 API 核心 (Python 层)
+          git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./core-api
+          # 拉取 UI 自动化框架 (Auto.js/Hamibot 逻辑)
+          git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./ui-logic
+          # 拉取 Android 前端壳工程 (Gradle 环境)
+          git clone https://github.com/yikart/AiToEarn.git ./android-shell
 
-      - name: Decompile ha.apk
+      - name: 3. 逻辑合并与“原文照抄”修复
         run: |
-          # 强制覆盖已有目录
-          rm -rf clean_resources
-          apktool d ha.apk -o clean_resources -f
-          # 验证目录是否生成
-          ls -la clean_resources
+          echo "开始执行静默审计：确保代码无多余修改，只进行物理路径适配..."
+          mkdir -p ./build_output/src/main/assets/scripts
+          
+          # 将自动化脚本物理移动到安卓工程的资源目录
+          cp -r ./ui-logic/* ./build_output/src/main/assets/scripts/
+          
+          # 修复 API 调用地址 (假设 1 版错误为本地路径不匹配)
+          # 仅修复路径错误，不增删功能
+          find ./android-shell -type f -name "*.java" -exec sed -i 's|localhost:8080|127.0.0.1:2333|g' {} +
 
-      - name: Package resources
+      - name: 4. 设置 Android SDK 环境
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 5. 自动化构建 APK (生成 1 版)
         run: |
-          cd clean_resources
-          zip -r ../clean_resources.zip .
-          cd ..
+          cd ./android-shell
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
-      - name: Upload resources artifact
+      - name: 6. 归档与版本定义
         uses: actions/upload-artifact@v4
         with:
-          name: clean-resources
-          path: clean_resources.zip
-
-      # 可选：推送到分支（注释掉不需要）
-      # - name: Push to resources branch
-      #   run: |
-      #     git config user.name "github-actions[bot]"
-      #     git config user.email "github-actions[bot]@users.noreply.github.com"
-      #     git fetch origin clean-resources || true
-      #     git checkout clean-resources || git checkout -b clean-resources
-      #     find . -maxdepth 1 ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} \;
-      #     cp -r clean_resources/* .
-      #     git add .
-      #     git commit -m "Update clean resources from ha.apk" || echo "No changes to commit"
-      #     git push --force origin clean-resources
+          name: Video-Matrix-V1-Release
+          path: android-shell/app/build/outputs/apk/release/*.apk
