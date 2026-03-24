@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V8
+name: Video-Matrix-APK-Auto-Build-V9
 
 on:
   workflow_dispatch:
@@ -14,20 +14,20 @@ jobs:
         with:
           path: main-repo
 
-      - name: 2. 拉取核心组件 (8 版修复：物理更换为可访问的镜像源)
+      - name: 2. 拉取核心组件 (9版延续 8版镜像源)
         run: |
           # 物理拉取：核心去水印 API
           git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./core-api
           # 物理拉取：搬运逻辑
           git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./ui-logic
-          # 8 版修复点：更换为目前物理可访问的 Auto.js 开源镜像仓库
+          # 维持 8版 有效镜像源
           git clone https://github.com/hyb1996/Auto.js.git ./android-shell
 
-      - name: 3. 逻辑合并与“物理强插”修复 (遵循 7 版审计逻辑)
+      - name: 3. 逻辑合并与“物理强插”修复
         run: |
-          echo "开始执行 8 版 静默审计：正在物理定位工程并注入资源..."
+          echo "开始执行 9版 静默审计：正在物理定位工程并注入资源..."
           
-          # 定位有效工程根目录 (寻找 settings.gradle)
+          # 定位有效工程根目录
           FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
           if [ -z "$FOUND_PATH" ]; then
             PROJECT_ROOT="./android-shell"
@@ -38,15 +38,14 @@ jobs:
 
           # 物理补齐最小化构建标记 (禁用 EOF)
           if [ ! -f "settings.gradle" ]; then
-            printf "rootProject.name = 'AutoJs-Matrix-V8'\ninclude ':app'" > settings.gradle
+            printf "rootProject.name = 'AutoJs-Matrix-V9'\ninclude ':app'" > settings.gradle
           fi
 
-          # 物理移动脚本资源：将 ui-logic 注入到安卓 assets/scripts
-          # 针对 Auto.js 源码结构，assets 通常在 app/src/main/assets
+          # 物理移动脚本资源至标准 Android 路径
           mkdir -p ./app/src/main/assets/scripts || mkdir -p ./src/main/assets/scripts || true
           cp -r $GITHUB_WORKSPACE/ui-logic/* ./app/src/main/assets/scripts/ || true
           
-          # 物理替换 API 接口地址 (延续 1-7 版修复逻辑)
+          # 物理替换 API 接口地址 (延续 1-8 版逻辑)
           find . -type f -name "*.java" -exec sed -i 's|localhost:8080|127.0.0.1:2333|g' {} +
 
       - name: 4. 设置 Android SDK 环境
@@ -55,23 +54,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (8 版修复：适配老旧 Gradle 版本兼容性)
+      - name: 5. 自动化构建 APK (9版优化：物理初始化构建环境)
         run: |
           # 重新定位物理路径
           FOUND_PATH=$(find ./android-shell -name "settings.gradle*" | head -n 1)
           if [ -z "$FOUND_PATH" ]; then cd ./android-shell; else cd $(dirname "$FOUND_PATH"); fi
           
-          # 物理初始化/修复 Gradle Wrapper
-          # 许多老旧 Auto.js 仓库需要较低版本的 Gradle，先尝试 7.6 兼容版
+          # 物理初始化 Gradle Wrapper (使用 7.6 兼容版)
           gradle wrapper --gradle-version 7.6
           chmod +x gradlew
           
           # 执行构建：优先编译 Debug 版
           ./gradlew :app:assembleDebug --stacktrace || ./gradlew assembleDebug
 
-      - name: 6. 归档与版本定义
-        uses: upload-artifact@v4
+      - name: 6. 归档与版本定义 (9版修复点：补全 actions/ 命名空间)
+        uses: actions/upload-artifact@v4
         with:
-          name: Video-Matrix-V8-Release
+          name: Video-Matrix-V9-Release
           path: |
             **/*.apk
+            **/build/outputs/apk/**/*.apk
