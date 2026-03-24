@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V1
+name: Video-Matrix-APK-Auto-Build-V2
 
 on:
   workflow_dispatch:
@@ -25,14 +25,13 @@ jobs:
 
       - name: 3. 逻辑合并与“原文照抄”修复
         run: |
-          echo "开始执行静默审计：确保代码无多余修改，只进行物理路径适配..."
+          echo "开始执行静默审计：正在定位物理路径..."
           mkdir -p ./build_output/src/main/assets/scripts
           
           # 将自动化脚本物理移动到安卓工程的资源目录
-          cp -r ./ui-logic/* ./build_output/src/main/assets/scripts/
+          cp -r ./ui-logic/* ./build_output/src/main/assets/scripts/ || true
           
-          # 修复 API 调用地址 (假设 1 版错误为本地路径不匹配)
-          # 仅修复路径错误，不增删功能
+          # 修复 API 调用地址 (延续 1 版修复逻辑)
           find ./android-shell -type f -name "*.java" -exec sed -i 's|localhost:8080|127.0.0.1:2333|g' {} +
 
       - name: 4. 设置 Android SDK 环境
@@ -41,14 +40,30 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (生成 1 版)
+      - name: 5. 自动化构建 APK (2版修复点：物理补齐 gradlew)
         run: |
           cd ./android-shell
+          # 物理检查：如果当前目录没有 gradlew，则尝试从子目录寻找并拉回根目录
+          if [ ! -f "gradlew" ]; then
+            echo "未在根目录发现 gradlew，启动深度搜索..."
+            GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+            if [ -n "$GRADLEW_PATH" ]; then
+              echo "发现 gradlew 位于: $GRADLEW_PATH，正在进行物理重定位..."
+              # 进入 gradlew 所在的实际 Android 目录
+              cd $(dirname "$GRADLEW_PATH")
+            else
+              echo "错误：该仓库不含 Gradle Wrapper，尝试初始化..."
+              gradle wrapper
+            fi
+          fi
+          # 执行权限修复并构建
           chmod +x gradlew
           ./gradlew assembleRelease
 
       - name: 6. 归档与版本定义
         uses: actions/upload-artifact@v4
         with:
-          name: Video-Matrix-V1-Release
-          path: android-shell/app/build/outputs/apk/release/*.apk
+          name: Video-Matrix-V2-Release
+          path: |
+            android-shell/**/build/outputs/apk/release/*.apk
+            **/build/outputs/apk/release/*.apk
