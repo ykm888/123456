@@ -1,38 +1,36 @@
 name: Build Auto.js APK
 
 on:
-  push:
-    branches: [main, master]
-    tags:
-      - 'v*'
-  workflow_dispatch:
+  workflow_dispatch:   # 仅手动触发，如需自动触发可添加 push 或 tag 条件
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      
+
+      - name: Setup Java (required for autojs-cli)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
       - name: Install autojs-cli
-        run: |
-          npm install -g autojs-cli
-          # 如果有其他打包工具依赖
-          npm install -g apktool-cli
-      
+        run: npm install -g autojs-cli
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: 'platforms;android-30 build-tools;30.0.3'
-      
-      # 创建签名文件
-      - name: Setup keystore
+
+      - name: Prepare keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
           echo "KEYSTORE_PATH=release.keystore" >> $GITHUB_ENV
@@ -42,58 +40,31 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      
-      - name: Prepare project structure
+
+      - name: Build unsigned APK
         run: |
-          # 创建必要的目录结构
           mkdir -p dist
-          # 如果有图标文件，确保存在
-          if [ ! -f res/icon.png ]; then
-            # 创建默认图标
-            convert -size 512x512 xc:blue res/icon.png || echo "需要安装imagemagick"
-          fi
-      
-      - name: Build APK with Auto.js
-        run: |
-          # 使用 autojs-cli 打包
+          # autojs-cli 打包命令，根据实际工具调整
           autojs build \
             --project ./ \
             --output ./dist/app-unsigned.apk
-          
-          # 签名 APK
+
+      - name: Sign APK
+        run: |
+          # 使用 Android SDK 自带的 apksigner 签名
           apksigner sign \
             --ks "$KEYSTORE_PATH" \
             --ks-key-alias "$KEYSTORE_ALIAS" \
             --ks-pass pass:"$KEYSTORE_PASSWORD" \
             --out ./dist/app-signed.apk \
             ./dist/app-unsigned.apk
-          
-          # 重命名为最终文件名
+
+      - name: Rename final APK
+        run: |
           mv ./dist/app-signed.apk ./dist/kuaishou-bot-${{ github.run_number }}.apk
-      
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: kuaishou-bot
           path: ./dist/*.apk
-      
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ./dist/*.apk
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body: |
-            ## 快手抖音带货助手
-            
-            ### 更新内容
-            - 自动选品、自动搜索、自动发布
-            - 支持每日发布100条视频
-            
-            ### 安装说明
-            1. 下载APK安装到手机
-            2. 开启无障碍服务权限
-            3. 运行前先登录快手和抖音账号
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
