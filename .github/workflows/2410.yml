@@ -18,15 +18,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 检查必要文件
+      - name: 切换到项目目录（如果存在）
         run: |
+          if [ -d "autojs-kuaishou-douyin-bot" ] && [ -f "autojs-kuaishou-douyin-bot/main.js" ]; then
+            cd autojs-kuaishou-douyin-bot
+            echo "已切换到 autojs-kuaishou-douyin-bot 目录"
+          elif [ -f "main.js" ]; then
+            echo "main.js 位于根目录"
+          else
+            echo "未找到 main.js，请检查仓库结构"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(pwd)" >> $GITHUB_ENV
+
+      - name: 确保必要文件存在
+        run: |
+          cd "$PROJECT_DIR"
+          # 如果 main.js 不存在（理论上已存在），但以防万一
           if [ ! -f "main.js" ]; then
             echo "错误：main.js 不存在"
             exit 1
           fi
+          # 确保 modules 目录存在
+          mkdir -p modules
+          # 确保 config.js 存在（可选）
+          if [ ! -f "config.js" ]; then
+            echo "// 配置文件示例，请根据实际情况修改" > config.js
+          fi
 
-      - name: 确保 project.json 存在
+      - name: 生成 project.json（如果缺失）
         run: |
+          cd "$PROJECT_DIR"
           if [ ! -f "project.json" ]; then
             jq -n \
               --arg name "快手抖音带货助手" \
@@ -45,6 +67,7 @@ jobs:
 
       - name: 更新版本信息
         run: |
+          cd "$PROJECT_DIR"
           jq --arg versionName "${{ github.event.inputs.version_name }}" \
              --argjson versionCode ${{ github.event.inputs.version_code }} \
              '.versionName = $versionName | .versionCode = $versionCode' \
@@ -52,15 +75,18 @@ jobs:
 
       - name: 打包脚本
         run: |
+          cd "$PROJECT_DIR"
           mkdir -p release
           cp -r ./* release/ 2>/dev/null || true
+          # 移除 .git 相关文件和 GitHub Actions 工作流目录，避免打包进去
           rm -rf release/.git release/.github release/node_modules
           cd release
           zip -r ../kuaishou-bot-v${{ github.event.inputs.version_name }}.zip ./*
           cd ..
+          echo "打包完成，文件位于 $PROJECT_DIR/kuaishou-bot-v${{ github.event.inputs.version_name }}.zip"
 
       - name: 上传脚本包
         uses: actions/upload-artifact@v4
         with:
           name: kuaishou-bot-v${{ github.event.inputs.version_name }}
-          path: kuaishou-bot-v${{ github.event.inputs.version_name }}.zip
+          path: ${{ env.PROJECT_DIR }}/kuaishou-bot-v${{ github.event.inputs.version_name }}.zip
