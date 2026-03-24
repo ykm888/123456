@@ -25,22 +25,30 @@ jobs:
             exit 1
           fi
 
-      - name: 生成 project.json（如缺失）
+      - name: 确保 project.json 存在
         run: |
           if [ ! -f "project.json" ]; then
-            echo '{
-  "name": "快手抖音带货助手",
-  "versionName": "${{ github.event.inputs.version_name }}",
-  "versionCode": ${{ github.event.inputs.version_code }},
-  "packageName": "com.yourname.kuaishoubot",
-  "main": "main.js"
-}' > project.json
+            jq -n \
+              --arg name "快手抖音带货助手" \
+              --arg versionName "${{ github.event.inputs.version_name }}" \
+              --argjson versionCode ${{ github.event.inputs.version_code }} \
+              --arg packageName "com.yourname.kuaishoubot" \
+              --arg main "main.js" \
+              '{
+                name: $name,
+                versionName: $versionName,
+                versionCode: $versionCode,
+                packageName: $packageName,
+                main: $main
+              }' > project.json
           fi
 
-      - name: 更新版本号
+      - name: 更新版本信息
         run: |
-          sed -i "s/\"versionName\": \".*\"/\"versionName\": \"${{ github.event.inputs.version_name }}\"/" project.json
-          sed -i "s/\"versionCode\": .*/\"versionCode\": ${{ github.event.inputs.version_code }},/" project.json
+          jq --arg versionName "${{ github.event.inputs.version_name }}" \
+             --argjson versionCode ${{ github.event.inputs.version_code }} \
+             '.versionName = $versionName | .versionCode = $versionCode' \
+             project.json > tmp.json && mv tmp.json project.json
 
       - name: 打包脚本
         run: |
