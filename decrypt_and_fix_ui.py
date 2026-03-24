@@ -3,7 +3,6 @@ import re
 import sys
 
 def decrypt_string(enc, key=9):
-    """模拟 _0x93af9e 解密函数"""
     parts = enc.split('.')
     result = ""
     for p in parts[:-1]:
@@ -29,7 +28,6 @@ def extract_array(content):
                     return arr
             except:
                 continue
-    # 回退：提取所有双引号字符串
     strings = re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', content)
     return strings if strings else None
 
@@ -53,18 +51,23 @@ def main():
             f.write(f"{i}: {val}\n")
     print("解密完成，结果已保存到 decrypted_strings.txt")
 
-    # 替换 _0x542ac 函数体
+    # 更安全的修改：注释掉整个 http.get 请求，直接调用成功分支
+    # 查找 _0x542ac 函数并替换其内容
     new_content = re.sub(
         r'function _0x542ac\(\)\{[\s\S]*?\}',
-        'function _0x542ac(){console.log("本地模拟验证通过");_0xfeb("mock_data","模拟的脚本内容");}',
+        'function _0x542ac(){console.log("绕过网络请求，直接模拟验证通过");_0xfeb("mock_data","模拟的脚本内容");}',
         content,
         flags=re.DOTALL
     )
 
-    if 'function _0x542ac(){console.log("本地模拟验证通过");' not in new_content:
-        print("警告：未能替换 _0x542ac 函数，请手动检查。")
-    else:
-        print("已替换 _0x542ac 函数。")
+    # 如果替换失败，尝试另一种方式：只替换 http.get 调用部分
+    if 'function _0x542ac(){console.log("绕过网络请求"' not in new_content:
+        new_content = re.sub(
+            r'http\[\'get\'\]\(_0xe439ae,.*?\);',
+            'console.log("绕过网络请求");_0xfeb("mock_data","模拟的脚本内容");',
+            content,
+            flags=re.DOTALL
+        )
 
     output = sys.argv[2] if len(sys.argv) > 2 else 'ui_fixed.js'
     with open(output, 'w', encoding='utf-8') as f:
