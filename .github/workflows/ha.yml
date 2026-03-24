@@ -1,4 +1,4 @@
-name: Video-Matrix-APK-Auto-Build-V15
+name: Video-Matrix-APK-Auto-Build-V16
 
 on:
   workflow_dispatch:
@@ -9,55 +9,56 @@ jobs:
   Physical-Audit-and-Build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. 物理环境准备 (15版：初始化 workspace)
+      - name: 1. 物理环境准备 (16版：初始化 workspace)
         run: |
           mkdir -p workspace/app/src/main/assets/scripts
-          echo "15版 物理工作空间就绪。"
+          echo "16版 物理空间初始化完成。"
 
-      - name: 2. 拉取组件并物理归位 (15版延续逻辑)
+      - name: 2. 拉取组件并物理归位 (16版延续逻辑)
         run: |
           git clone https://github.com/Evil0ctal/Douyin_TikTok_Download_API.git ./temp-api
           git clone https://github.com/lonerge/tiktok_youtube_douyin_handling.git ./temp-ui
           git clone https://github.com/hyb1996/Auto.js.git ./temp-shell
           
+          # 物理迁移
           cp -r ./temp-shell/. ./workspace/
           cp -r ./temp-ui/* ./workspace/app/src/main/assets/scripts/ || true
           echo "组件物理归位完成。"
 
-      - name: 3. 核心修复：物理构建文件重写 (针对 Gradle 9.4 优化)
+      - name: 3. 核心修复：物理重构构建脚本 (16版：适配 AGP 8.2.2)
         run: |
           cd workspace
-          # 15版修复点：物理写入 settings.gradle
-          printf "rootProject.name = 'AutoMatrixV15'\ninclude ':app'" > settings.gradle
+          # 16版修复点：物理写入 settings.gradle
+          printf "rootProject.name = 'AutoMatrixV16'\ninclude ':app'" > settings.gradle
 
-          # 15版修复点：物理写入根 build.gradle
-          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies {\n        classpath 'com.android.tools.build:gradle:8.1.0'\n    }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
+          # 16版修复点：物理写入根 build.gradle (升级插件版本至 8.2.2)
+          printf "buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies {\n        classpath 'com.android.tools.build:gradle:8.2.2'\n    }\n}\nallprojects {\n    repositories { google(); mavenCentral() }\n}" > build.gradle
 
-          # 15版修复点：物理写入 app/build.gradle (显式指定编译兼容性)
-          printf "apply plugin: 'com.android.application'\nandroid {\n    namespace 'com.matrix.auto'\n    compileSdk 33\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdk 24\n        targetSdk 33\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n}\nrepositories { google(); mavenCentral() }" > ./app/build.gradle
+          # 16版修复点：物理写入 app/build.gradle (改用 plugins 闭包以增强兼容性)
+          printf "plugins {\n    id 'com.android.application'\n}\nandroid {\n    namespace 'com.matrix.auto'\n    compileSdk 34\n    defaultConfig {\n        applicationId 'com.matrix.auto'\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName '1.0'\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n}\nrepositories { google(); mavenCentral() }" > ./app/build.gradle
 
-          # 15版修复点：物理注入最小化 AndroidManifest
+          # 16版修复点：物理注入最小化 AndroidManifest
           printf "<?xml version='1.0' encoding='utf-8'?>\n<manifest xmlns:android='http://schemas.android.com/apk/res/android' package='com.matrix.auto'>\n    <application android:label='AutoMatrix'>\n        <activity android:name='.MainActivity' android:exported='true'>\n            <intent-filter>\n                <action android:name='android.intent.action.MAIN' /><category android:name='android.intent.category.LAUNCHER' />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>" > ./app/src/main/AndroidManifest.xml
 
-      - name: 4. 设置 Java 环境 (15版修复点：物理升级至 Java 17)
+      - name: 4. 设置 Java 环境 (16版保持 Java 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 5. 自动化构建 APK (15版执行物理构建)
+      - name: 5. 自动化构建 APK (16版：物理强隔离构建)
         run: |
           cd workspace
-          # 物理初始化 Gradle Wrapper 8.1 (配合 Java 17)
-          gradle wrapper --gradle-version 8.1
+          # 16版修复点：显式下载并使用本地 Wrapper，物理屏蔽系统 gradle 9.4
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          # 执行构建
+          
+          # 物理执行：必须使用 ./gradlew 确保版本锁定
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: 6. 归档与版本定义
         uses: actions/upload-artifact@v4
         with:
-          name: Video-Matrix-V15-Release
+          name: Video-Matrix-V16-Release
           path: |
-            workspace/**/*.apk
-            workspace/app/build/outputs/apk/**/*.apk
+            workspace/app/build/outputs/apk/debug/*.apk
