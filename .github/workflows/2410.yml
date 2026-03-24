@@ -1,7 +1,7 @@
 name: Build Auto.js APK
 
 on:
-  workflow_dispatch:   # 仅手动触发，如需自动触发可添加 push 或 tag 条件
+  workflow_dispatch:   # 仅手动触发
 
 jobs:
   build:
@@ -16,11 +16,12 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Setup Java (required for autojs-cli)
+      # 关键修改：使用 JDK 17（符合 android-actions/setup-android 要求）
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '17'
 
       - name: Install autojs-cli
         run: npm install -g autojs-cli
@@ -44,14 +45,12 @@ jobs:
       - name: Build unsigned APK
         run: |
           mkdir -p dist
-          # autojs-cli 打包命令，根据实际工具调整
           autojs build \
             --project ./ \
             --output ./dist/app-unsigned.apk
 
       - name: Sign APK
         run: |
-          # 使用 Android SDK 自带的 apksigner 签名
           apksigner sign \
             --ks "$KEYSTORE_PATH" \
             --ks-key-alias "$KEYSTORE_ALIAS" \
