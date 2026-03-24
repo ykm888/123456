@@ -1,53 +1,99 @@
-name: Fix APK (Safe)
+name: Build Auto.js APK
 
 on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: 'temurin'
-          java-version: '11'
-      - name: Install tools
+          node-version: '18'
+      
+      - name: Install autojs-cli
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zipalign
-          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-          chmod +x apktool
-          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
-          sudo mv apktool_2.9.3.jar /usr/local/bin/apktool.jar
-          sudo mv apktool /usr/local/bin/apktool
-          apktool --version
-      - name: Decompile APK
+          npm install -g autojs-cli
+          # 如果有其他打包工具依赖
+          npm install -g apktool-cli
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-30 build-tools;30.0.3'
+      
+      # 创建签名文件
+      - name: Setup keystore
         run: |
-          rm -rf clean_resources
-          apktool d ha.apk -o clean_resources -f
-      - name: Check ui.js exists
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          echo "KEYSTORE_PATH=release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }}" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      
+      - name: Prepare project structure
         run: |
-          if [ ! -f clean_resources/assets/project/ui.js ]; then
-            echo "错误：ui.js 不存在，请检查反编译结果"
-            exit 1
+          # 创建必要的目录结构
+          mkdir -p dist
+          # 如果有图标文件，确保存在
+          if [ ! -f res/icon.png ]; then
+            # 创建默认图标
+            convert -size 512x512 xc:blue res/icon.png || echo "需要安装imagemagick"
           fi
-      - name: Safe fix ui.js
-        run: python3 safe_fix_ui.py clean_resources/assets/project/ui.js
-      - name: Rebuild APK
-        run: apktool b clean_resources -o unsigned.apk
-      - name: Align APK
-        run: zipalign -v -p 4 unsigned.apk aligned.apk
-      - name: Generate debug keystore
+      
+      - name: Build APK with Auto.js
         run: |
-          keytool -genkey -v -keystore debug.keystore -keyalg RSA -keysize 2048 -validity 10000 -alias androiddebugkey -storepass android -keypass android -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown"
-      - name: Sign APK
-        run: jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore -storepass android aligned.apk androiddebugkey
-      - name: Rename final APK
-        run: mv aligned.apk final.apk
-      - name: Upload APK
+          # 使用 autojs-cli 打包
+          autojs build \
+            --project ./ \
+            --output ./dist/app-unsigned.apk
+          
+          # 签名 APK
+          apksigner sign \
+            --ks "$KEYSTORE_PATH" \
+            --ks-key-alias "$KEYSTORE_ALIAS" \
+            --ks-pass pass:"$KEYSTORE_PASSWORD" \
+            --out ./dist/app-signed.apk \
+            ./dist/app-unsigned.apk
+          
+          # 重命名为最终文件名
+          mv ./dist/app-signed.apk ./dist/kuaishou-bot-${{ github.run_number }}.apk
+      
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: final-apk
-          path: final.apk
+          name: kuaishou-bot
+          path: ./dist/*.apk
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./dist/*.apk
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## 快手抖音带货助手
+            
+            ### 更新内容
+            - 自动选品、自动搜索、自动发布
+            - 支持每日发布100条视频
+            
+            ### 安装说明
+            1. 下载APK安装到手机
+            2. 开启无障碍服务权限
+            3. 运行前先登录快手和抖音账号
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
